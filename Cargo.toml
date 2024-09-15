@@ -11,6 +11,7 @@ fork = "0.2.0"
 lightyear = { version = "0.17.1", features = ["avian2d", "leafwing"] }
 os_pipe = "1.2.1"
 owo-colors = "4.1.0"
+rand = "0.8.5"
 serde = { version = "1.0.210", features = ["derive"] }
 tracing-subscriber = "0.3.18"
 

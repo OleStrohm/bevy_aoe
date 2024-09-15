@@ -214,6 +214,7 @@ dependencies = [
  "lightyear",
  "os_pipe",
  "owo-colors",
+ "rand",
  "serde",
  "tracing-subscriber",
 ]

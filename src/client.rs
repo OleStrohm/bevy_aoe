@@ -5,22 +5,19 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use lightyear::prelude::*;
+use lightyear::shared::events::components::InputEvent;
 
+use crate::game::shared_config;
+use crate::game::shared_movement_behaviour;
+use crate::game::PlayerPosition;
 use crate::game::KEY;
 use crate::game::PROTOCOL_ID;
+use crate::game::{Direction, Inputs};
 
 use self::client::ClientCommands;
+use self::client::InputManager;
+use self::client::Predicted;
 use self::client::{Authentication, ClientTransport, IoConfig, NetConfig};
-
-pub fn shared_config(mode: Mode) -> SharedConfig {
-    SharedConfig {
-        server_replication_send_interval: Duration::from_millis(40),
-        tick: TickConfig {
-            tick_duration: Duration::from_secs_f64(1.0 / 64.0),
-        },
-        mode,
-    }
-}
 
 pub struct ClientPlugin {
     pub server_port: u16,
@@ -63,5 +60,42 @@ impl Plugin for ClientPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands.connect_client();
         });
+        app.add_systems(FixedPreUpdate, buffer_input);
+        app.add_systems(FixedUpdate, player_movement);
+    }
+}
+
+fn buffer_input(
+    tick_manager: Res<TickManager>,
+    mut input_manager: ResMut<InputManager<Inputs>>,
+    keypress: Res<ButtonInput<KeyCode>>,
+) {
+    let tick = tick_manager.tick();
+    let mut input = Inputs::None;
+    let direction = Direction {
+        up: keypress.pressed(KeyCode::KeyW),
+        down: keypress.pressed(KeyCode::KeyS),
+        left: keypress.pressed(KeyCode::KeyA),
+        right: keypress.pressed(KeyCode::KeyD),
+    };
+
+    if direction.up || direction.down || direction.left || direction.right {
+        input = Inputs::Direction(direction);
+    }
+
+    input_manager.add_input(input, tick);
+}
+
+fn player_movement(
+    mut position_query: Query<&mut PlayerPosition, With<Predicted>>,
+    mut input_reader: EventReader<InputEvent<Inputs>>,
+    time: Res<Time>,
+) {
+    for input in input_reader.read() {
+        if let Some(input) = input.input() {
+            for position in position_query.iter_mut() {
+                shared_movement_behaviour(position, input, &time);
+            }
+        }
     }
 }

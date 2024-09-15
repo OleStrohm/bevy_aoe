@@ -1,26 +1,26 @@
+use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use bevy::prelude::*;
 use lightyear::prelude::*;
+use lightyear::shared::events::components::InputEvent;
 
+use crate::game::shared_config;
+use crate::game::shared_movement_behaviour;
+use crate::game::Inputs;
+use crate::game::PlayerColor;
+use crate::game::PlayerId;
+use crate::game::PlayerPosition;
 use crate::game::KEY;
 use crate::game::PROTOCOL_ID;
 
 use self::server::NetcodeConfig;
+use self::server::Replicate;
 use self::server::ServerCommands;
+use self::server::SyncTarget;
 use self::server::{IoConfig, NetConfig, ServerTransport};
-
-pub fn shared_config(mode: Mode) -> SharedConfig {
-    SharedConfig {
-        server_replication_send_interval: Duration::from_millis(40),
-        tick: TickConfig {
-            tick_duration: Duration::from_secs_f64(1.0 / 64.0),
-        },
-        mode,
-    }
-}
 
 pub struct ServerPlugin {
     pub server_port: u16,
@@ -45,19 +45,24 @@ impl Plugin for ServerPlugin {
             io: io_config,
         };
 
-        let client_config = server::ServerConfig {
+        let server_config = server::ServerConfig {
             shared: shared_config(Mode::Separate),
             net: vec![net_config],
+            replication: ReplicationConfig {
+                send_interval: Duration::from_millis(40),
+                ..default()
+            },
             ..default()
         };
 
-        app.add_plugins(server::ServerPlugins::new(client_config));
+        app.add_plugins(server::ServerPlugins::new(server_config));
 
         app.init_resource::<Global>();
         app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
         })
-        .add_systems(FixedUpdate, handle_connections);
+        .add_systems(FixedUpdate, handle_connections)
+        .add_systems(FixedUpdate, movement);
     }
 }
 
@@ -71,5 +76,45 @@ fn handle_connections(
     mut connections: EventReader<ServerConnectEvent>,
     mut global: ResMut<Global>,
 ) {
+    for connection in connections.read() {
+        let client_id = connection.client_id;
 
+        let entity = commands.spawn((
+            Name::new(format!("Player - {client_id}")),
+            PlayerId(client_id),
+            PlayerPosition(Vec2::ZERO),
+            PlayerColor(Color::linear_rgb(
+                rand::random(),
+                rand::random(),
+                rand::random(),
+            )),
+            Replicate {
+                sync: SyncTarget {
+                    prediction: NetworkTarget::Single(client_id),
+                    ..default()
+                },
+                ..default()
+            },
+        ));
+
+        global.client_id_to_entity_id.insert(client_id, entity.id());
+    }
+}
+
+fn movement(
+    mut positions: Query<&mut PlayerPosition>,
+    mut input_reader: EventReader<InputEvent<Inputs, ClientId>>,
+    global: Res<Global>,
+    time: Res<Time>,
+) {
+    for input in input_reader.read() {
+        let client_id = input.context();
+        if let Some(input) = input.input() {
+            if let Some(player_entity) = global.client_id_to_entity_id.get(client_id) {
+                if let Ok(position) = positions.get_mut(*player_entity) {
+                    shared_movement_behaviour(position, input, &time);
+                }
+            }
+        }
+    }
 }

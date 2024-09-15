@@ -95,8 +95,8 @@ pub fn server(mut clients: Vec<Child>) {
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
             WorldInspectorPlugin::default(),
-            GamePlugin,
             ServerPlugin { server_port: 5000 },
+            GamePlugin,
         ))
         .add_systems(Last, move |app_exit: EventReader<AppExit>| {
             if !app_exit.is_empty() {
@@ -153,11 +153,11 @@ pub fn client(index: i32) {
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
             //WorldInspectorPlugin::default(),
-            GamePlugin,
             ClientPlugin {
                 server_port: 5000,
                 client_id: index as u64,
             },
+            GamePlugin,
         ))
         .add_systems(
             Update,
