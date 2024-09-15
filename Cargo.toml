@@ -4,3 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+avian2d = "0.1.2"
+bevy = { version = "0.14.2", features = [ "dynamic_linking" ] }
+fork = "0.2.0"
+lightyear = { version = "0.17.1", features = ["avian2d", "leafwing"] }
+os_pipe = "1.2.1"
+tracing-subscriber = "0.3.18"
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[features]
+
+[profile.dev]
+opt-level = 1
