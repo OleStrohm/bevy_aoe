@@ -6,9 +6,12 @@ edition = "2021"
 [dependencies]
 avian2d = "0.1.2"
 bevy = { version = "0.14.2", features = [ "dynamic_linking" ] }
+bevy-inspector-egui = "0.25.2"
 fork = "0.2.0"
 lightyear = { version = "0.17.1", features = ["avian2d", "leafwing"] }
 os_pipe = "1.2.1"
+owo-colors = "4.1.0"
+serde = { version = "1.0.210", features = ["derive"] }
 tracing-subscriber = "0.3.18"
 
 [profile.dev.package."*"]

@@ -1,98 +1,174 @@
-use bevy::log::Level;
-use bevy::log::LogPlugin;
+#![allow(clippy::type_complexity)]
+
+use std::fmt::Display;
+use std::process::{Child, Stdio};
+
+use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy::winit::WinitPlugin;
-use fork::{fork, waitpid, Fork};
-use os_pipe::pipe;
-use tracing_subscriber::filter::LevelFilter;
-use std::io::Read;
-use std::io::Write;
-use std::sync::Mutex;
-use tracing_subscriber::Layer;
+use bevy::window::WindowResolution;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use owo_colors::OwoColorize;
+
+use game::GamePlugin;
+
+use self::client::ClientPlugin;
+use self::server::ServerPlugin;
+
+mod client;
+mod game;
+mod server;
 
 fn main() {
-    let (mut reader, writer) = pipe().expect("Failed to create pipe");
-
-    let monitor_width = 2560;
-    let monitor_height = 1440;
-
-    match fork() {
-        Ok(Fork::Parent(child)) => {
-            App::new()
-                .add_plugins(DefaultPlugins.set(WindowPlugin {
-                    primary_window: Some(Window {
-                        resolution:
-                            ((monitor_width / 2) as f32, (monitor_height / 2) as f32).into(),
-                        title: "Bevy AOE".into(),
-                        resizable: false,
-                        focused: true,
-                        ..default()
-                    }),
-                    ..default()
-                }))
-                .add_systems(Startup, move |mut windows: Query<&mut Window>| {
-                    for mut window in &mut windows {
-                        window.position = WindowPosition::At(
-                            (monitor_width / 4, monitor_height / 2 - 100).into(),
-                        );
-                    }
-                })
-                .run();
-
-            let mut writer = writer;
-            if writeln!(writer).is_ok() {
-                waitpid(child).expect("Failed to wait for child");
-            }
+    match std::env::args().nth(1).as_deref() {
+        Some("client") => client(
+            std::env::args()
+                .nth(2)
+                .expect("Client needs a second argument")
+                .parse::<i32>()
+                .expect("Second argument must be a number"),
+        ),
+        Some("server") => {
+            server(vec![]);
         }
-        Ok(Fork::Child) => {
-            let (app_exit_tx, app_exit_rx) = std::sync::mpsc::channel::<()>();
-            let app_exit_rx = Mutex::new(app_exit_rx);
+        Some("host") | None => {
+            let client1 = start_client(1, "[C1]".green());
+            let client2 = start_client(2, "[C2]".yellow());
 
-            std::thread::spawn(move || {
-                let mut should_stop = [0; 1];
-                reader
-                    .read_exact(&mut should_stop)
-                    .expect("Failed to read from pipe");
-                app_exit_tx.send(()).expect("Could not notify of read");
-            });
-
-            App::new()
-                .add_plugins(
-                    DefaultPlugins
-                        .set(WindowPlugin {
-                            primary_window: Some(Window {
-                                position: WindowPosition::At((1800, 100).into()),
-                                resolution: (400.0, 400.0).into(),
-                                title: "Bevy AOE - client".into(),
-                                resizable: false,
-                                focused: false,
-                                ..default()
-                            }),
-                            ..default()
-                        })
-                        .set(LogPlugin {
-                            custom_layer: |_| {
-                                Some(
-                                    tracing_subscriber::fmt::layer()
-                                        .pretty()
-                                        .with_writer(std::io::stdout)
-                                        .with_filter(LevelFilter::INFO)
-                                        .boxed(),
-                                )
-                            },
-                            filter: String::new(),
-                            level: Level::ERROR,
-                        }),
-                )
-                .add_systems(Update, move |mut event_writer: EventWriter<AppExit>| {
-                    if app_exit_rx.lock().unwrap().try_recv().is_ok() {
-                        event_writer.send(AppExit::Success);
-                    }
-                })
-                .run();
-
-            std::process::exit(0);
+            server(vec![client1, client2]);
         }
-        Err(e) => println!("Fork failed: {e}"),
+        _ => panic!("The first argument is nonsensical"),
     }
+}
+
+fn start_client(index: usize, prefix: impl Display) -> std::process::Child {
+    let mut child = std::process::Command::new(std::env::args().next().unwrap())
+        .args(["client", &format!("{index}")])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let prefix = format!("{{ print \"{} \" $0}}", prefix);
+
+    std::process::Command::new("awk")
+        .arg(prefix.clone())
+        .stdin(child.stdout.take().unwrap())
+        .spawn()
+        .unwrap();
+    std::process::Command::new("awk")
+        .arg(prefix)
+        .stdin(child.stderr.take().unwrap())
+        .spawn()
+        .unwrap();
+
+    child
+}
+
+pub fn server(mut clients: Vec<Child>) {
+    println!("Starting server!");
+
+    let monitor_width = 2560.0;
+    let monitor_height = 1440.0;
+    let window_width = monitor_width / 2.0;
+    let window_height = monitor_height / 2.0;
+    let position = WindowPosition::At(IVec2::new(
+        (monitor_width - window_width) as i32 / 2,
+        (monitor_height - window_height) as i32 / 2,
+    ));
+    let resolution =
+        WindowResolution::new(window_width, window_height).with_scale_factor_override(1.0);
+
+    App::new()
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Bevy AoE".to_string(),
+                    position,
+                    resolution: resolution.clone(),
+                    resizable: false,
+                    decorations: false,
+                    focused: true,
+                    ..default()
+                }),
+                ..default()
+            }),
+            //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
+            WorldInspectorPlugin::default(),
+            GamePlugin,
+            ServerPlugin { server_port: 5000 },
+        ))
+        .add_systems(Last, move |app_exit: EventReader<AppExit>| {
+            if !app_exit.is_empty() {
+                for client in &mut clients {
+                    client.kill().unwrap();
+                }
+            }
+        })
+        .add_systems(
+            Update,
+            move |mut windows: Query<&mut Window>, time: Res<Time>| {
+                if time.elapsed_seconds_f64() < 1.0 {
+                    for mut window in &mut windows {
+                        window.position = position;
+                        window.resolution = resolution.clone();
+                        window.focused = true;
+                    }
+                }
+            },
+        )
+        .run();
+}
+
+pub fn client(index: i32) {
+    println!("Starting client!");
+
+    let monitor_width = 2560.0;
+    let monitor_height = 1440.0;
+    let window_width = monitor_width / 4.0;
+    let window_height = monitor_height / 4.0;
+    let position = WindowPosition::At(
+        (
+            monitor_width as i32 / 2 - window_width as i32 * (index - 1),
+            0,
+        )
+            .into(),
+    );
+    let resolution =
+        WindowResolution::new(window_width, window_height).with_scale_factor_override(1.0);
+
+    App::new()
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Bevy AoE - client".to_string(),
+                    position,
+                    resolution: resolution.clone(),
+                    resizable: false,
+                    decorations: false,
+                    focused: false,
+                    ..default()
+                }),
+                ..default()
+            }),
+            //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
+            //WorldInspectorPlugin::default(),
+            GamePlugin,
+            ClientPlugin {
+                server_port: 5000,
+                client_id: index as u64,
+            },
+        ))
+        .add_systems(
+            Update,
+            move |mut windows: Query<&mut Window>, time: Res<Time>| {
+                if time.elapsed_seconds_f64() < 1.0 {
+                    for mut window in &mut windows {
+                        window.position = position;
+                        window.resolution = resolution.clone();
+                    }
+                }
+            },
+        )
+        .run();
 }
