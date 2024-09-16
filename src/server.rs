@@ -64,8 +64,7 @@ impl Plugin for ServerPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
         })
-        .add_systems(FixedUpdate, handle_connections)
-        .add_systems(FixedUpdate, movement);
+        .add_systems(FixedUpdate, (handle_connections, movement, minion_movement));
     }
 }
 
@@ -112,6 +111,7 @@ fn movement(
     mut commands: Commands,
     mut positions: Query<&mut PlayerPosition>,
     mut input_reader: EventReader<InputEvent<Inputs, ClientId>>,
+    mut minion_targets: Query<(&ControlledBy, &mut MinionTarget)>,
     global: Res<Global>,
     time: Res<Time>,
 ) {
@@ -138,20 +138,37 @@ fn movement(
                         )),
                         Replicate {
                             sync: SyncTarget {
+                                prediction: NetworkTarget::All,
                                 interpolation: NetworkTarget::All,
+                            },
+                            controlled_by: ControlledBy {
+                                target: NetworkTarget::Single(client_id),
                                 ..default()
                             },
-                            //controlled_by: ControlledBy {
-                            //    target: NetworkTarget::Single(client_id),
-                            //    ..default()
-                            //},
                             ..default()
                         },
                     ));
                 }
+                Inputs::Target(target) => {
+                    for (controlled_by, mut m_target) in &mut minion_targets {
+                        if controlled_by.targets(&client_id) {
+                            m_target.0 = *target;
+                        }
+                    }
+                }
                 Inputs::None => {}
-                _ => unimplemented!(),
             }
+        }
+    }
+}
+
+fn minion_movement(mut minions: Query<(&mut MinionPosition, &MinionTarget)>, time: Res<Time>) {
+    for (mut pos, target) in &mut minions {
+        let diff = target.0 - pos.0;
+        if diff.length_squared() < 0.01 {
+            pos.0 = target.0;
+        } else {
+            pos.0 += diff.clamp_length(0.0, 1.0 * time.delta_seconds());
         }
     }
 }

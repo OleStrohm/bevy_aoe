@@ -8,6 +8,9 @@ use lightyear::connection::netcode::PRIVATE_KEY_BYTES;
 use lightyear::prelude::*;
 
 use self::client::ComponentSyncMode;
+use self::client::Confirmed;
+use self::client::Interpolated;
+use self::client::Predicted;
 
 pub struct GamePlugin;
 
@@ -16,7 +19,10 @@ impl Plugin for GamePlugin {
         app.add_plugins(ProtocolPlugin);
         app.add_systems(Startup, || println!("Game has begun"));
         app.add_systems(Startup, spawn_camera);
-        app.add_systems(FixedUpdate, (show_players, move_players, show_minions));
+        app.add_systems(
+            FixedUpdate,
+            (show_players, move_players, show_minions, move_minions),
+        );
     }
 }
 
@@ -38,6 +44,12 @@ fn move_players(mut players: Query<(&PlayerPosition, &mut Transform)>) {
     }
 }
 
+fn move_minions(mut minions: Query<(&MinionPosition, &mut Transform)>) {
+    for (pos, mut tf) in &mut minions {
+        tf.translation = pos.extend(0.0);
+    }
+}
+
 //fn show_players(mut gizmos: Gizmos, players: Query<(&PlayerPosition, &PlayerColor)>) {
 //    for (position, color) in &players {
 //        gizmos.rect(
@@ -51,14 +63,25 @@ fn move_players(mut players: Query<(&PlayerPosition, &mut Transform)>) {
 
 fn show_players(
     mut commands: Commands,
-    players: Query<(Entity, &PlayerPosition, &PlayerColor), Without<Sprite>>,
+    players: Query<
+        (
+            Entity,
+            &PlayerPosition,
+            &PlayerColor,
+            Option<&Predicted>,
+            Option<&Interpolated>,
+        ),
+        Without<Sprite>,
+    >,
 ) {
-    for (player, pos, &PlayerColor(color)) in &players {
-        commands.entity(player).insert(SpriteBundle {
-            sprite: Sprite { color, ..default() },
-            transform: Transform::from_xyz(pos.x, pos.y, 0.0),
-            ..default()
-        });
+    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
+        if predicted.is_some() || interpolated.is_some() {
+            commands.entity(player).insert(SpriteBundle {
+                sprite: Sprite { color, ..default() },
+                transform: Transform::from_xyz(pos.x, pos.y, 0.0),
+                ..default()
+            });
+        }
     }
 }
 
@@ -136,6 +159,24 @@ pub struct PlayerColor(pub Color);
 )]
 pub struct MinionPosition(pub Vec2);
 
+impl Add for MinionPosition {
+    type Output = MinionPosition;
+
+    #[inline]
+    fn add(self, rhs: MinionPosition) -> MinionPosition {
+        MinionPosition(self.0.add(rhs.0))
+    }
+}
+
+impl Mul<f32> for &MinionPosition {
+    type Output = MinionPosition;
+
+    #[inline]
+    fn mul(self, rhs: f32) -> MinionPosition {
+        MinionPosition(self.0 * rhs)
+    }
+}
+
 #[derive(
     Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
 )]
@@ -150,20 +191,26 @@ impl Plugin for ProtocolPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(InputPlugin::<Inputs>::default());
 
-        app.register_component::<PlayerId>(ChannelDirection::ServerToClient)
+        app.register_type::<PlayerId>()
+            .register_component::<PlayerId>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Once)
             .add_interpolation(ComponentSyncMode::Once);
-        app.register_component::<PlayerPosition>(ChannelDirection::ServerToClient)
+        app.register_type::<PlayerPosition>()
+            .register_component::<PlayerPosition>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Full)
             .add_interpolation(ComponentSyncMode::Full)
             .add_linear_interpolation_fn();
-        app.register_component::<PlayerColor>(ChannelDirection::ServerToClient)
+        app.register_type::<PlayerColor>()
+            .register_component::<PlayerColor>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Once)
             .add_interpolation(ComponentSyncMode::Once);
-        app.register_component::<MinionPosition>(ChannelDirection::ServerToClient)
-            .add_prediction(ComponentSyncMode::Once)
-            .add_interpolation(ComponentSyncMode::Once);
-        app.register_component::<MinionTarget>(ChannelDirection::ServerToClient)
+        app.register_type::<MinionPosition>()
+            .register_component::<MinionPosition>(ChannelDirection::ServerToClient)
+            .add_prediction(ComponentSyncMode::Full)
+            .add_interpolation(ComponentSyncMode::Full)
+            .add_linear_interpolation_fn();
+        app.register_type::<MinionTarget>()
+            .register_component::<MinionTarget>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Once)
             .add_interpolation(ComponentSyncMode::Once);
 

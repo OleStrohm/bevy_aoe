@@ -73,7 +73,7 @@ fn buffer_input(
     tick_manager: Res<TickManager>,
     mut input_manager: ResMut<InputManager<Inputs>>,
     keypress: Res<ButtonInput<KeyCode>>,
-    //mouse: Res<ButtonInput<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
 ) {
     let tick = tick_manager.tick();
     let mut input = Inputs::None;
@@ -92,6 +92,10 @@ fn buffer_input(
 
     if keypress.just_pressed(KeyCode::Space) {
         input_manager.add_input(Inputs::Spawn, tick);
+    }
+
+    if mouse.just_pressed(MouseButton::Right) {
+        input_manager.add_input(Inputs::Target(Vec2::new(-2.0, -2.0)), tick);
     }
 }
 
