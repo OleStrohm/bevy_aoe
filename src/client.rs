@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bevy::prelude::*;
+use lightyear::client::input::native::InputSystemSet;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
@@ -27,7 +28,7 @@ pub struct ClientPlugin {
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
         let link_conditioner = LinkConditionerConfig {
-            incoming_latency: Duration::from_millis(100),
+            incoming_latency: Duration::from_millis(200),
             incoming_jitter: Duration::from_millis(0),
             incoming_loss: 0.0,
         };
@@ -60,7 +61,10 @@ impl Plugin for ClientPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands.connect_client();
         });
-        app.add_systems(FixedPreUpdate, buffer_input);
+        app.add_systems(
+            FixedPreUpdate,
+            buffer_input.in_set(InputSystemSet::BufferInputs),
+        );
         app.add_systems(FixedUpdate, player_movement);
     }
 }
@@ -69,6 +73,7 @@ fn buffer_input(
     tick_manager: Res<TickManager>,
     mut input_manager: ResMut<InputManager<Inputs>>,
     keypress: Res<ButtonInput<KeyCode>>,
+    //mouse: Res<ButtonInput<MouseButton>>,
 ) {
     let tick = tick_manager.tick();
     let mut input = Inputs::None;
@@ -84,6 +89,10 @@ fn buffer_input(
     }
 
     input_manager.add_input(input, tick);
+
+    if keypress.just_pressed(KeyCode::Space) {
+        input_manager.add_input(Inputs::Spawn, tick);
+    }
 }
 
 fn player_movement(
@@ -92,9 +101,9 @@ fn player_movement(
     time: Res<Time>,
 ) {
     for input in input_reader.read() {
-        if let Some(input) = input.input() {
+        if let Some(Inputs::Direction(dir)) = input.input() {
             for position in position_query.iter_mut() {
-                shared_movement_behaviour(position, input, &time);
+                shared_movement_behaviour(position, dir, &time);
             }
         }
     }

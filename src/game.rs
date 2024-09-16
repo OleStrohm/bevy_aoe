@@ -1,3 +1,5 @@
+use std::ops::Add;
+use std::ops::Mul;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -14,8 +16,7 @@ impl Plugin for GamePlugin {
         app.add_plugins(ProtocolPlugin);
         app.add_systems(Startup, || println!("Game has begun"));
         app.add_systems(Startup, spawn_camera);
-        app.add_systems(FixedUpdate, show_players);
-        app.add_systems(FixedUpdate, move_players);
+        app.add_systems(FixedUpdate, (show_players, move_players, show_minions));
     }
 }
 
@@ -61,6 +62,23 @@ fn show_players(
     }
 }
 
+fn show_minions(
+    mut commands: Commands,
+    players: Query<(Entity, &MinionPosition, &PlayerColor), Without<Sprite>>,
+) {
+    for (player, pos, &PlayerColor(color)) in &players {
+        commands.entity(player).insert(SpriteBundle {
+            sprite: Sprite { color, ..default() },
+            transform: Transform {
+                translation: pos.extend(0.0),
+                scale: Vec3::splat(0.5),
+                ..default()
+            },
+            ..default()
+        });
+    }
+}
+
 #[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Direction {
     pub(crate) up: bool,
@@ -69,11 +87,11 @@ pub struct Direction {
     pub(crate) right: bool,
 }
 
-#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum Inputs {
     Direction(Direction),
-    Delete,
     Spawn,
+    Target(Vec2),
     None,
 }
 
@@ -90,10 +108,38 @@ pub struct PlayerId(pub ClientId);
 )]
 pub struct PlayerPosition(pub Vec2);
 
+impl Add for PlayerPosition {
+    type Output = PlayerPosition;
+
+    #[inline]
+    fn add(self, rhs: PlayerPosition) -> PlayerPosition {
+        PlayerPosition(self.0.add(rhs.0))
+    }
+}
+
+impl Mul<f32> for &PlayerPosition {
+    type Output = PlayerPosition;
+
+    #[inline]
+    fn mul(self, rhs: f32) -> PlayerPosition {
+        PlayerPosition(self.0 * rhs)
+    }
+}
+
 #[derive(
     Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
 )]
 pub struct PlayerColor(pub Color);
+
+#[derive(
+    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
+)]
+pub struct MinionPosition(pub Vec2);
+
+#[derive(
+    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
+)]
+pub struct MinionTarget(pub Vec2);
 
 pub const PROTOCOL_ID: u64 = 0;
 pub const KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
@@ -109,8 +155,15 @@ impl Plugin for ProtocolPlugin {
             .add_interpolation(ComponentSyncMode::Once);
         app.register_component::<PlayerPosition>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Full)
-            .add_interpolation(ComponentSyncMode::Once);
+            .add_interpolation(ComponentSyncMode::Full)
+            .add_linear_interpolation_fn();
         app.register_component::<PlayerColor>(ChannelDirection::ServerToClient)
+            .add_prediction(ComponentSyncMode::Once)
+            .add_interpolation(ComponentSyncMode::Once);
+        app.register_component::<MinionPosition>(ChannelDirection::ServerToClient)
+            .add_prediction(ComponentSyncMode::Once)
+            .add_interpolation(ComponentSyncMode::Once);
+        app.register_component::<MinionTarget>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Once)
             .add_interpolation(ComponentSyncMode::Once);
 
@@ -131,21 +184,23 @@ pub fn shared_config(mode: Mode) -> SharedConfig {
     }
 }
 
-pub fn shared_movement_behaviour(mut position: Mut<PlayerPosition>, input: &Inputs, time: &Time) {
+pub fn shared_movement_behaviour(
+    mut position: Mut<PlayerPosition>,
+    direction: &Direction,
+    time: &Time,
+) {
     const MOVE_SPEED: f32 = 10.0;
     let move_speed = MOVE_SPEED * time.delta_seconds();
-    if let Inputs::Direction(direction) = input {
-        if direction.up {
-            position.y += move_speed;
-        }
-        if direction.down {
-            position.y -= move_speed;
-        }
-        if direction.left {
-            position.x -= move_speed;
-        }
-        if direction.right {
-            position.x += move_speed;
-        }
+    if direction.up {
+        position.y += move_speed;
+    }
+    if direction.down {
+        position.y -= move_speed;
+    }
+    if direction.left {
+        position.x -= move_speed;
+    }
+    if direction.right {
+        position.x += move_speed;
     }
 }

@@ -10,12 +10,15 @@ use lightyear::shared::events::components::InputEvent;
 use crate::game::shared_config;
 use crate::game::shared_movement_behaviour;
 use crate::game::Inputs;
+use crate::game::MinionPosition;
+use crate::game::MinionTarget;
 use crate::game::PlayerColor;
 use crate::game::PlayerId;
 use crate::game::PlayerPosition;
 use crate::game::KEY;
 use crate::game::PROTOCOL_ID;
 
+use self::server::ControlledBy;
 use self::server::NetcodeConfig;
 use self::server::Replicate;
 use self::server::ServerCommands;
@@ -29,7 +32,7 @@ pub struct ServerPlugin {
 impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         let link_conditioner = LinkConditionerConfig {
-            incoming_latency: Duration::from_millis(100),
+            incoming_latency: Duration::from_millis(200),
             incoming_jitter: Duration::from_millis(0),
             incoming_loss: 0.0,
         };
@@ -91,6 +94,10 @@ fn handle_connections(
             Replicate {
                 sync: SyncTarget {
                     prediction: NetworkTarget::Single(client_id),
+                    interpolation: NetworkTarget::AllExceptSingle(client_id),
+                },
+                controlled_by: ControlledBy {
+                    target: NetworkTarget::Single(client_id),
                     ..default()
                 },
                 ..default()
@@ -102,18 +109,48 @@ fn handle_connections(
 }
 
 fn movement(
+    mut commands: Commands,
     mut positions: Query<&mut PlayerPosition>,
     mut input_reader: EventReader<InputEvent<Inputs, ClientId>>,
     global: Res<Global>,
     time: Res<Time>,
 ) {
     for input in input_reader.read() {
-        let client_id = input.context();
+        let client_id = *input.context();
         if let Some(input) = input.input() {
-            if let Some(player_entity) = global.client_id_to_entity_id.get(client_id) {
-                if let Ok(position) = positions.get_mut(*player_entity) {
-                    shared_movement_behaviour(position, input, &time);
+            match input {
+                Inputs::Direction(dir) => {
+                    if let Some(player_entity) = global.client_id_to_entity_id.get(&client_id) {
+                        if let Ok(position) = positions.get_mut(*player_entity) {
+                            shared_movement_behaviour(position, dir, &time);
+                        }
+                    }
                 }
+                Inputs::Spawn => {
+                    commands.spawn((
+                        Name::new(format!("Minion - {client_id}")),
+                        MinionPosition(Vec2::ZERO),
+                        MinionTarget(Vec2::new(4.0, 4.0)),
+                        PlayerColor(Color::linear_rgb(
+                            rand::random(),
+                            rand::random(),
+                            rand::random(),
+                        )),
+                        Replicate {
+                            sync: SyncTarget {
+                                interpolation: NetworkTarget::All,
+                                ..default()
+                            },
+                            //controlled_by: ControlledBy {
+                            //    target: NetworkTarget::Single(client_id),
+                            //    ..default()
+                            //},
+                            ..default()
+                        },
+                    ));
+                }
+                Inputs::None => {}
+                _ => unimplemented!(),
             }
         }
     }
