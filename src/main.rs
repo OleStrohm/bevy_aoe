@@ -3,7 +3,6 @@
 use std::fmt::Display;
 use std::process::{Child, Stdio};
 
-use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -65,7 +64,7 @@ fn start_client(index: usize, prefix: impl Display) -> std::process::Child {
     child
 }
 
-pub fn server(mut clients: Vec<Child>) {
+pub fn server(clients: Vec<Child>) {
     println!("Starting server!");
 
     let monitor_width = 2560.0;
@@ -95,16 +94,12 @@ pub fn server(mut clients: Vec<Child>) {
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
             WorldInspectorPlugin::default(),
-            ServerPlugin { server_port: 5000 },
+            ServerPlugin {
+                server_port: 5000,
+                clients: std::sync::Arc::new(std::sync::Mutex::new(clients)),
+            },
             GamePlugin,
         ))
-        .add_systems(Last, move |app_exit: EventReader<AppExit>| {
-            if !app_exit.is_empty() {
-                for client in &mut clients {
-                    client.kill().unwrap();
-                }
-            }
-        })
         .add_systems(
             Update,
             move |mut windows: Query<&mut Window>, time: Res<Time>| {

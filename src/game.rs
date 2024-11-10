@@ -70,18 +70,19 @@ fn show_players(
             &PlayerColor,
             Option<&Predicted>,
             Option<&Interpolated>,
+            Option<&Confirmed>,
         ),
         Without<Sprite>,
     >,
 ) {
-    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
-        if predicted.is_some() || interpolated.is_some() {
+    for (player, pos, &PlayerColor(color), predicted, interpolated, confirmed) in &players {
+        //if predicted.is_some() || interpolated.is_some() {
             commands.entity(player).insert(SpriteBundle {
                 sprite: Sprite { color, ..default() },
                 transform: Transform::from_xyz(pos.x, pos.y, 0.0),
                 ..default()
             });
-        }
+        //}
     }
 }
 

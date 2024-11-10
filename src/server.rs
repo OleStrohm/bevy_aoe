@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::process::Child;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -27,6 +28,7 @@ use self::server::{IoConfig, NetConfig, ServerTransport};
 
 pub struct ServerPlugin {
     pub server_port: u16,
+    pub clients: std::sync::Arc<std::sync::Mutex<Vec<Child>>>,
 }
 
 impl Plugin for ServerPlugin {
@@ -59,10 +61,42 @@ impl Plugin for ServerPlugin {
         };
 
         app.add_plugins(server::ServerPlugins::new(server_config));
+        let mut clients = std::mem::take(&mut *self.clients.lock().unwrap());
+        app.add_systems(Last, move |app_exit: EventReader<AppExit>| {
+            if !app_exit.is_empty() {
+                for client in &mut clients {
+                    client.kill().unwrap();
+                }
+            }
+        });
 
         app.init_resource::<Global>();
-        app.add_systems(Startup, |mut commands: Commands| {
+        app.add_systems(Startup, |mut commands: Commands, mut global: ResMut<Global>| {
             commands.start_server();
+            let client_id = ClientId::Local(0);
+            let entity = commands.spawn((
+                Name::new("Player - server"),
+                PlayerId(client_id),
+                PlayerPosition(Vec2::ZERO),
+                PlayerColor(Color::linear_rgb(
+                    rand::random(),
+                    rand::random(),
+                    rand::random(),
+                )),
+                Replicate {
+                    sync: SyncTarget {
+                        prediction: NetworkTarget::Single(client_id),
+                        interpolation: NetworkTarget::AllExceptSingle(client_id),
+                    },
+                    controlled_by: ControlledBy {
+                        target: NetworkTarget::Single(client_id),
+                        ..default()
+                    },
+                    ..default()
+                },
+            ));
+
+            global.client_id_to_entity_id.insert(client_id, entity.id());
         })
         .add_systems(FixedUpdate, (handle_connections, movement, minion_movement));
     }
