@@ -8,7 +8,6 @@ use lightyear::connection::netcode::PRIVATE_KEY_BYTES;
 use lightyear::prelude::*;
 
 use self::client::ComponentSyncMode;
-use self::client::Confirmed;
 use self::client::Interpolated;
 use self::client::Predicted;
 
@@ -50,17 +49,6 @@ fn move_minions(mut minions: Query<(&MinionPosition, &mut Transform)>) {
     }
 }
 
-//fn show_players(mut gizmos: Gizmos, players: Query<(&PlayerPosition, &PlayerColor)>) {
-//    for (position, color) in &players {
-//        gizmos.rect(
-//            position.extend(0.0),
-//            Quat::IDENTITY,
-//            Vec2::ONE * 1.0,
-//            color.0,
-//        );
-//    }
-//}
-
 fn show_players(
     mut commands: Commands,
     players: Query<
@@ -70,19 +58,20 @@ fn show_players(
             &PlayerColor,
             Option<&Predicted>,
             Option<&Interpolated>,
-            Option<&Confirmed>,
         ),
         Without<Sprite>,
     >,
 ) {
-    for (player, pos, &PlayerColor(color), predicted, interpolated, confirmed) in &players {
-        //if predicted.is_some() || interpolated.is_some() {
+    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
+        if predicted.is_some()
+            || interpolated.is_some()
+        {
             commands.entity(player).insert(SpriteBundle {
                 sprite: Sprite { color, ..default() },
                 transform: Transform::from_xyz(pos.x, pos.y, 0.0),
                 ..default()
             });
-        //}
+        }
     }
 }
 

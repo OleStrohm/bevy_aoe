@@ -51,7 +51,7 @@ impl Plugin for ServerPlugin {
         };
 
         let server_config = server::ServerConfig {
-            shared: shared_config(Mode::Separate),
+            shared: shared_config(Mode::HostServer),
             net: vec![net_config],
             replication: ReplicationConfig {
                 send_interval: Duration::from_millis(40),
@@ -71,32 +71,8 @@ impl Plugin for ServerPlugin {
         });
 
         app.init_resource::<Global>();
-        app.add_systems(Startup, |mut commands: Commands, mut global: ResMut<Global>| {
+        app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
-            let client_id = ClientId::Local(0);
-            let entity = commands.spawn((
-                Name::new("Player - server"),
-                PlayerId(client_id),
-                PlayerPosition(Vec2::ZERO),
-                PlayerColor(Color::linear_rgb(
-                    rand::random(),
-                    rand::random(),
-                    rand::random(),
-                )),
-                Replicate {
-                    sync: SyncTarget {
-                        prediction: NetworkTarget::Single(client_id),
-                        interpolation: NetworkTarget::AllExceptSingle(client_id),
-                    },
-                    controlled_by: ControlledBy {
-                        target: NetworkTarget::Single(client_id),
-                        ..default()
-                    },
-                    ..default()
-                },
-            ));
-
-            global.client_id_to_entity_id.insert(client_id, entity.id());
         })
         .add_systems(FixedUpdate, (handle_connections, movement, minion_movement));
     }

@@ -20,6 +20,40 @@ use self::client::InputManager;
 use self::client::Predicted;
 use self::client::{Authentication, ClientTransport, IoConfig, NetConfig};
 
+pub struct HostClientPlugin;
+//pub enum ClientPlugin {
+//    HostClient,
+//    NetworkClient {
+//        server_port: u16,
+//        client_id: u64,
+//    }
+//}
+
+impl Plugin for HostClientPlugin {
+    fn build(&self, app: &mut App) {
+        let net_config = NetConfig::Local {
+            id: 0,
+        };
+
+        let client_config = client::ClientConfig {
+            shared: shared_config(Mode::HostServer),
+            net: net_config,
+            ..default()
+        };
+
+        app.add_plugins(client::ClientPlugins::new(client_config));
+
+        app.add_systems(Startup, |mut commands: Commands| {
+            commands.connect_client();
+        });
+        app.add_systems(
+            FixedPreUpdate,
+            buffer_input.in_set(InputSystemSet::BufferInputs),
+        );
+        app.add_systems(FixedUpdate, player_movement);
+    }
+}
+
 pub struct ClientPlugin {
     pub server_port: u16,
     pub client_id: u64,
