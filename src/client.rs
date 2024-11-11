@@ -20,74 +20,56 @@ use self::client::InputManager;
 use self::client::Predicted;
 use self::client::{Authentication, ClientTransport, IoConfig, NetConfig};
 
-pub struct HostClientPlugin;
-//pub enum ClientPlugin {
-//    HostClient,
-//    NetworkClient {
-//        server_port: u16,
-//        client_id: u64,
-//    }
-//}
-
-impl Plugin for HostClientPlugin {
-    fn build(&self, app: &mut App) {
-        let net_config = NetConfig::Local {
-            id: 0,
-        };
-
-        let client_config = client::ClientConfig {
-            shared: shared_config(Mode::HostServer),
-            net: net_config,
-            ..default()
-        };
-
-        app.add_plugins(client::ClientPlugins::new(client_config));
-
-        app.add_systems(Startup, |mut commands: Commands| {
-            commands.connect_client();
-        });
-        app.add_systems(
-            FixedPreUpdate,
-            buffer_input.in_set(InputSystemSet::BufferInputs),
-        );
-        app.add_systems(FixedUpdate, player_movement);
-    }
-}
-
-pub struct ClientPlugin {
-    pub server_port: u16,
-    pub client_id: u64,
+pub enum ClientPlugin {
+    HostClient,
+    NetworkClient { server_port: u16, client_id: u64 },
 }
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        let link_conditioner = LinkConditionerConfig {
-            incoming_latency: Duration::from_millis(200),
-            incoming_jitter: Duration::from_millis(0),
-            incoming_loss: 0.0,
-        };
-        let io_config = IoConfig::from_transport(ClientTransport::UdpSocket(
-            SocketAddr::from_str("0.0.0.0:0").unwrap(),
-        ))
-        .with_conditioner(link_conditioner);
-        let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), self.server_port);
-        let auth = Authentication::Manual {
-            server_addr,
-            client_id: self.client_id,
-            private_key: KEY,
-            protocol_id: PROTOCOL_ID,
-        };
+        let client_config = match self {
+            ClientPlugin::HostClient => {
+                let net_config = NetConfig::Local { id: 0 };
 
-        let net_config = NetConfig::Netcode {
-            auth,
-            io: io_config,
-            config: default(),
-        };
+                client::ClientConfig {
+                    shared: shared_config(Mode::HostServer),
+                    net: net_config,
+                    ..default()
+                }
+            }
+            &ClientPlugin::NetworkClient {
+                server_port,
+                client_id,
+            } => {
+                let link_conditioner = LinkConditionerConfig {
+                    incoming_latency: Duration::from_millis(200),
+                    incoming_jitter: Duration::from_millis(0),
+                    incoming_loss: 0.0,
+                };
+                let io_config = IoConfig::from_transport(ClientTransport::UdpSocket(
+                    SocketAddr::from_str("0.0.0.0:0").unwrap(),
+                ))
+                .with_conditioner(link_conditioner);
+                let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), server_port);
+                let auth = Authentication::Manual {
+                    server_addr,
+                    client_id,
+                    private_key: KEY,
+                    protocol_id: PROTOCOL_ID,
+                };
 
-        let client_config = client::ClientConfig {
-            shared: shared_config(Mode::Separate),
-            net: net_config,
-            ..default()
+                let net_config = NetConfig::Netcode {
+                    auth,
+                    io: io_config,
+                    config: default(),
+                };
+
+                client::ClientConfig {
+                    shared: shared_config(Mode::Separate),
+                    net: net_config,
+                    ..default()
+                }
+            }
         };
 
         app.add_plugins(client::ClientPlugins::new(client_config));

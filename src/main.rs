@@ -10,7 +10,7 @@ use owo_colors::OwoColorize;
 
 use game::GamePlugin;
 
-use self::client::{ClientPlugin, HostClientPlugin};
+use self::client::ClientPlugin;
 use self::server::ServerPlugin;
 
 mod client;
@@ -98,7 +98,7 @@ pub fn server(clients: Vec<Child>) {
                 server_port: 5000,
                 clients: std::sync::Arc::new(std::sync::Mutex::new(clients)),
             },
-            HostClientPlugin,
+            ClientPlugin::HostClient,
             GamePlugin,
         ))
         .add_systems(
@@ -149,7 +149,7 @@ pub fn client(index: i32) {
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
             //WorldInspectorPlugin::default(),
-            ClientPlugin {
+            ClientPlugin::NetworkClient {
                 server_port: 5000,
                 client_id: index as u64,
             },
