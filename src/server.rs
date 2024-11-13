@@ -148,8 +148,8 @@ fn movement(
                         )),
                         Replicate {
                             sync: SyncTarget {
-                                prediction: NetworkTarget::All,
-                                interpolation: NetworkTarget::All,
+                                prediction: NetworkTarget::Single(client_id),
+                                interpolation: NetworkTarget::AllExceptSingle(client_id),
                             },
                             controlled_by: ControlledBy {
                                 target: NetworkTarget::Single(client_id),
@@ -159,7 +159,7 @@ fn movement(
                         },
                     ));
                 }
-                Inputs::Target(target) => {
+                Inputs::Target(minions, target) => {
                     for (controlled_by, mut m_target) in &mut minion_targets {
                         if controlled_by.targets(&client_id) {
                             m_target.0 = *target;

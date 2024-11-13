@@ -7,6 +7,8 @@ use bevy::render::camera::ScalingMode;
 use lightyear::connection::netcode::PRIVATE_KEY_BYTES;
 use lightyear::prelude::*;
 
+use crate::client::Selected;
+
 use self::client::ComponentSyncMode;
 use self::client::Interpolated;
 use self::client::Predicted;
@@ -20,7 +22,13 @@ impl Plugin for GamePlugin {
         app.add_systems(Startup, spawn_camera);
         app.add_systems(
             FixedUpdate,
-            (show_players, move_players, show_minions, move_minions),
+            (
+                show_players,
+                move_players,
+                show_minions,
+                show_selected_minions,
+                move_minions,
+            ),
         );
     }
 }
@@ -63,9 +71,7 @@ fn show_players(
     >,
 ) {
     for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
-        if predicted.is_some()
-            || interpolated.is_some()
-        {
+        if predicted.is_some() || interpolated.is_some() {
             commands.entity(player).insert(SpriteBundle {
                 sprite: Sprite { color, ..default() },
                 transform: Transform::from_xyz(pos.x, pos.y, 0.0),
@@ -75,20 +81,57 @@ fn show_players(
     }
 }
 
+fn show_selected_minions(
+    mut commands: Commands,
+    selected_minions: Query<(Entity, Option<&Selected>)>,
+) {
+    for (minion, selected) in &selected_minions {
+        if selected.is_some() {
+            commands.entity(minion).with_children(|commands| {
+                commands.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::srgb(1.0, 0.0, 1.0),
+                        ..default()
+                    },
+                    transform: Transform {
+                        translation: Vec3::new(0.0, 0.0, -0.1),
+                        scale: Vec3::splat(1.1),
+                        ..default()
+                    },
+                    ..default()
+                });
+            });
+        } else {
+            commands.entity(minion).despawn_descendants();
+        }
+    }
+}
+
 fn show_minions(
     mut commands: Commands,
-    players: Query<(Entity, &MinionPosition, &PlayerColor), Without<Sprite>>,
+    players: Query<
+        (
+            Entity,
+            &MinionPosition,
+            &PlayerColor,
+            Option<&Predicted>,
+            Option<&Interpolated>,
+        ),
+        Without<Sprite>,
+    >,
 ) {
-    for (player, pos, &PlayerColor(color)) in &players {
-        commands.entity(player).insert(SpriteBundle {
-            sprite: Sprite { color, ..default() },
-            transform: Transform {
-                translation: pos.extend(0.0),
-                scale: Vec3::splat(0.5),
+    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
+        if predicted.is_some() || interpolated.is_some() {
+            commands.entity(player).insert(SpriteBundle {
+                sprite: Sprite { color, ..default() },
+                transform: Transform {
+                    translation: pos.extend(0.0),
+                    scale: Vec3::splat(0.5),
+                    ..default()
+                },
                 ..default()
-            },
-            ..default()
-        });
+            });
+        }
     }
 }
 
@@ -100,11 +143,11 @@ pub struct Direction {
     pub(crate) right: bool,
 }
 
-#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Inputs {
     Direction(Direction),
     Spawn,
-    Target(Vec2),
+    Target(Vec<Entity>, Vec2),
     None,
 }
 
@@ -192,8 +235,8 @@ impl Plugin for ProtocolPlugin {
             .add_linear_interpolation_fn();
         app.register_type::<PlayerColor>()
             .register_component::<PlayerColor>(ChannelDirection::ServerToClient)
-            .add_prediction(ComponentSyncMode::Once)
-            .add_interpolation(ComponentSyncMode::Once);
+            .add_prediction(ComponentSyncMode::Simple)
+            .add_interpolation(ComponentSyncMode::Simple);
         app.register_type::<MinionPosition>()
             .register_component::<MinionPosition>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Full)
@@ -201,8 +244,8 @@ impl Plugin for ProtocolPlugin {
             .add_linear_interpolation_fn();
         app.register_type::<MinionTarget>()
             .register_component::<MinionTarget>(ChannelDirection::ServerToClient)
-            .add_prediction(ComponentSyncMode::Once)
-            .add_interpolation(ComponentSyncMode::Once);
+            .add_prediction(ComponentSyncMode::Simple)
+            .add_interpolation(ComponentSyncMode::Simple);
 
         app.add_channel::<Channel1>(ChannelSettings {
             mode: ChannelMode::OrderedReliable(default()),

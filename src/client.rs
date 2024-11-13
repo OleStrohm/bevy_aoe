@@ -4,21 +4,33 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use lightyear::client::input::native::InputSystemSet;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
 use crate::game::shared_config;
 use crate::game::shared_movement_behaviour;
+use crate::game::MinionPosition;
 use crate::game::PlayerPosition;
 use crate::game::KEY;
 use crate::game::PROTOCOL_ID;
 use crate::game::{Direction, Inputs};
 
 use self::client::ClientCommands;
+use self::client::ClientConfig;
 use self::client::InputManager;
 use self::client::Predicted;
 use self::client::{Authentication, ClientTransport, IoConfig, NetConfig};
+
+#[derive(Debug, Resource)]
+pub struct StartDrag(Vec2);
+
+#[derive(Debug, Resource)]
+pub struct SelectedMinions(Vec<Entity>);
+
+#[derive(Debug, Component)]
+pub struct Selected;
 
 pub enum ClientPlugin {
     HostClient,
@@ -27,7 +39,115 @@ pub enum ClientPlugin {
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        let client_config = match self {
+        app.add_plugins(client::ClientPlugins::new(self.client_config()));
+
+        app.insert_resource(SelectedMinions(vec![]))
+            .add_systems(Startup, |mut commands: Commands| {
+                commands.connect_client();
+            })
+            .add_systems(
+                FixedPreUpdate,
+                (
+                    buffer_input.in_set(InputSystemSet::BufferInputs),
+                    player_movement,
+                ),
+            );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn buffer_input(
+    mut commands: Commands,
+    tick_manager: Res<TickManager>,
+    mut input_manager: ResMut<InputManager<Inputs>>,
+    keypress: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    selected_minions: Res<SelectedMinions>,
+    start_drag: Option<Res<StartDrag>>,
+    mut gizmos: Gizmos,
+    my_minions: Query<(Entity, &MinionPosition), With<Predicted>>,
+    currently_selected_minions: Query<
+        Entity,
+        (With<Selected>, With<MinionPosition>, With<Predicted>),
+    >,
+) {
+    let tick = tick_manager.tick();
+    let mut input = Inputs::None;
+    let direction = Direction {
+        up: keypress.pressed(KeyCode::KeyW),
+        down: keypress.pressed(KeyCode::KeyS),
+        left: keypress.pressed(KeyCode::KeyA),
+        right: keypress.pressed(KeyCode::KeyD),
+    };
+
+    if direction.up || direction.down || direction.left || direction.right {
+        input = Inputs::Direction(direction);
+    }
+
+    input_manager.add_input(input, tick);
+
+    if keypress.just_pressed(KeyCode::Space) {
+        input_manager.add_input(Inputs::Spawn, tick);
+    }
+
+    let window = windows.single();
+    let (camera, camera_transform) = camera.single();
+    if let Some(mouse_pos) = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor))
+    {
+        if mouse.just_pressed(MouseButton::Right) {
+            input_manager.add_input(Inputs::Target(selected_minions.0.clone(), mouse_pos), tick);
+        }
+
+        if mouse.just_pressed(MouseButton::Left) {
+            commands.insert_resource(StartDrag(mouse_pos));
+        } else if let Some(start_drag) = start_drag {
+            let top_left = mouse_pos.min(start_drag.0);
+            let size = mouse_pos.max(start_drag.0) - top_left;
+
+            if mouse.pressed(MouseButton::Left) {
+                gizmos.rect_2d(top_left + size / 2.0, 0.0, size, Color::BLACK);
+            } else if mouse.just_released(MouseButton::Left) {
+                let selrect = Rect::from_corners(top_left, top_left + size);
+                let selected_minions = my_minions
+                    .iter()
+                    .filter(|&(_, minion)| selrect.contains(minion.0))
+                    .map(|(e, _)| e)
+                    .collect::<Vec<_>>();
+
+                for minion in &currently_selected_minions {
+                    commands.entity(minion).remove::<Selected>();
+                }
+                for &minion in &selected_minions {
+                    commands.entity(minion).insert(Selected);
+                }
+                println!("Selected {} minions", selected_minions.len());
+                commands.insert_resource(SelectedMinions(selected_minions));
+            }
+        }
+    }
+}
+
+fn player_movement(
+    mut position_query: Query<&mut PlayerPosition, With<Predicted>>,
+    mut input_reader: EventReader<InputEvent<Inputs>>,
+    time: Res<Time>,
+) {
+    for input in input_reader.read() {
+        if let Some(Inputs::Direction(dir)) = input.input() {
+            for position in position_query.iter_mut() {
+                shared_movement_behaviour(position, dir, &time);
+            }
+        }
+    }
+}
+
+impl ClientPlugin {
+    fn client_config(&self) -> ClientConfig {
+        match self {
             ClientPlugin::HostClient => {
                 let net_config = NetConfig::Local { id: 0 };
 
@@ -69,61 +189,6 @@ impl Plugin for ClientPlugin {
                     net: net_config,
                     ..default()
                 }
-            }
-        };
-
-        app.add_plugins(client::ClientPlugins::new(client_config));
-
-        app.add_systems(Startup, |mut commands: Commands| {
-            commands.connect_client();
-        });
-        app.add_systems(
-            FixedPreUpdate,
-            buffer_input.in_set(InputSystemSet::BufferInputs),
-        );
-        app.add_systems(FixedUpdate, player_movement);
-    }
-}
-
-fn buffer_input(
-    tick_manager: Res<TickManager>,
-    mut input_manager: ResMut<InputManager<Inputs>>,
-    keypress: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-) {
-    let tick = tick_manager.tick();
-    let mut input = Inputs::None;
-    let direction = Direction {
-        up: keypress.pressed(KeyCode::KeyW),
-        down: keypress.pressed(KeyCode::KeyS),
-        left: keypress.pressed(KeyCode::KeyA),
-        right: keypress.pressed(KeyCode::KeyD),
-    };
-
-    if direction.up || direction.down || direction.left || direction.right {
-        input = Inputs::Direction(direction);
-    }
-
-    input_manager.add_input(input, tick);
-
-    if keypress.just_pressed(KeyCode::Space) {
-        input_manager.add_input(Inputs::Spawn, tick);
-    }
-
-    if mouse.just_pressed(MouseButton::Right) {
-        input_manager.add_input(Inputs::Target(Vec2::new(-2.0, -2.0)), tick);
-    }
-}
-
-fn player_movement(
-    mut position_query: Query<&mut PlayerPosition, With<Predicted>>,
-    mut input_reader: EventReader<InputEvent<Inputs>>,
-    time: Res<Time>,
-) {
-    for input in input_reader.read() {
-        if let Some(Inputs::Direction(dir)) = input.input() {
-            for position in position_query.iter_mut() {
-                shared_movement_behaviour(position, dir, &time);
             }
         }
     }
