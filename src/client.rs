@@ -6,12 +6,17 @@ use std::time::Duration;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use lightyear::client::input::native::InputSystemSet;
+use lightyear::packet::message_manager::MessageManager;
+use lightyear::prelude::client::NetClient;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::game::minion::MinionPosition;
 use crate::game::shared_config;
 use crate::game::shared_movement_behaviour;
-use crate::game::MinionPosition;
+use crate::game::Channel1;
+use crate::game::ClientMessage;
+use crate::game::OwnedBy;
 use crate::game::PlayerPosition;
 use crate::game::KEY;
 use crate::game::PROTOCOL_ID;
@@ -19,7 +24,9 @@ use crate::game::{Direction, Inputs};
 
 use self::client::ClientCommands;
 use self::client::ClientConfig;
+use self::client::ClientConnection;
 use self::client::InputManager;
+use self::client::Interpolated;
 use self::client::Predicted;
 use self::client::{Authentication, ClientTransport, IoConfig, NetConfig};
 
@@ -67,11 +74,11 @@ fn buffer_input(
     selected_minions: Res<SelectedMinions>,
     start_drag: Option<Res<StartDrag>>,
     mut gizmos: Gizmos,
-    my_minions: Query<(Entity, &MinionPosition), With<Predicted>>,
-    currently_selected_minions: Query<
-        Entity,
-        (With<Selected>, With<MinionPosition>, With<Predicted>),
-    >,
+    my_minions: Query<(Entity, &MinionPosition, &OwnedBy), With<Interpolated>>,
+    interpolated: Query<&Interpolated>,
+    currently_selected_minions: Query<(Entity, &OwnedBy), (With<Selected>, With<MinionPosition>)>,
+    connection: Res<ClientConnection>,
+    mut message_manager: ResMut<ClientConnectionManager>,
 ) {
     let tick = tick_manager.tick();
     let mut input = Inputs::None;
@@ -99,7 +106,16 @@ fn buffer_input(
         .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor))
     {
         if mouse.just_pressed(MouseButton::Right) {
-            input_manager.add_input(Inputs::Target(selected_minions.0.clone(), mouse_pos), tick);
+            message_manager
+                .send_message::<Channel1, _>(&mut ClientMessage::Target(
+                    selected_minions
+                        .0
+                        .iter()
+                        .filter_map(|&s| Some(interpolated.get(s).ok()?.confirmed_entity))
+                        .collect(),
+                    mouse_pos,
+                ))
+                .unwrap();
         }
 
         if mouse.just_pressed(MouseButton::Left) {
@@ -114,11 +130,13 @@ fn buffer_input(
                 let selrect = Rect::from_corners(top_left, top_left + size);
                 let selected_minions = my_minions
                     .iter()
-                    .filter(|&(_, minion)| selrect.contains(minion.0))
-                    .map(|(e, _)| e)
+                    .filter(|&(_, pos, owned_by)| {
+                        selrect.contains(pos.0) && owned_by.0 == connection.id()
+                    })
+                    .map(|(e, ..)| e)
                     .collect::<Vec<_>>();
 
-                for minion in &currently_selected_minions {
+                for (minion, _) in &currently_selected_minions {
                     commands.entity(minion).remove::<Selected>();
                 }
                 for &minion in &selected_minions {

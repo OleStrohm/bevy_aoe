@@ -2,36 +2,33 @@ use std::ops::Add;
 use std::ops::Mul;
 use std::time::Duration;
 
+use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
 use lightyear::connection::netcode::PRIVATE_KEY_BYTES;
+use lightyear::prelude::client::{ComponentSyncMode, Interpolated, Predicted};
 use lightyear::prelude::*;
 
-use crate::client::Selected;
+use self::minion::MinionPlugin;
+use self::minion::MinionPosition;
+use self::minion::MinionTarget;
 
-use self::client::ComponentSyncMode;
-use self::client::Interpolated;
-use self::client::Predicted;
+pub mod minion;
 
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ProtocolPlugin);
-        app.add_systems(Startup, || println!("Game has begun"));
-        app.add_systems(Startup, spawn_camera);
-        app.add_systems(
-            FixedUpdate,
-            (
-                show_players,
-                move_players,
-                show_minions,
-                show_selected_minions,
-                move_minions,
-            ),
-        );
+        app.add_plugins((ProtocolPlugin, MinionPlugin))
+            .add_systems(Startup, spawn_camera)
+            .add_systems(FixedUpdate, (show_players, move_players));
     }
 }
+
+#[derive(
+    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
+)]
+pub struct OwnedBy(pub ClientId);
 
 fn spawn_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
@@ -47,12 +44,6 @@ fn spawn_camera(mut commands: Commands) {
 
 fn move_players(mut players: Query<(&PlayerPosition, &mut Transform)>) {
     for (pos, mut tf) in &mut players {
-        tf.translation = pos.extend(0.0);
-    }
-}
-
-fn move_minions(mut minions: Query<(&MinionPosition, &mut Transform)>) {
-    for (pos, mut tf) in &mut minions {
         tf.translation = pos.extend(0.0);
     }
 }
@@ -81,61 +72,7 @@ fn show_players(
     }
 }
 
-fn show_selected_minions(
-    mut commands: Commands,
-    selected_minions: Query<(Entity, Option<&Selected>)>,
-) {
-    for (minion, selected) in &selected_minions {
-        if selected.is_some() {
-            commands.entity(minion).with_children(|commands| {
-                commands.spawn(SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::srgb(1.0, 0.0, 1.0),
-                        ..default()
-                    },
-                    transform: Transform {
-                        translation: Vec3::new(0.0, 0.0, -0.1),
-                        scale: Vec3::splat(1.1),
-                        ..default()
-                    },
-                    ..default()
-                });
-            });
-        } else {
-            commands.entity(minion).despawn_descendants();
-        }
-    }
-}
-
-fn show_minions(
-    mut commands: Commands,
-    players: Query<
-        (
-            Entity,
-            &MinionPosition,
-            &PlayerColor,
-            Option<&Predicted>,
-            Option<&Interpolated>,
-        ),
-        Without<Sprite>,
-    >,
-) {
-    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
-        if predicted.is_some() || interpolated.is_some() {
-            commands.entity(player).insert(SpriteBundle {
-                sprite: Sprite { color, ..default() },
-                transform: Transform {
-                    translation: pos.extend(0.0),
-                    scale: Vec3::splat(0.5),
-                    ..default()
-                },
-                ..default()
-            });
-        }
-    }
-}
-
-#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Direction {
     pub(crate) up: bool,
     pub(crate) down: bool,
@@ -143,12 +80,30 @@ pub struct Direction {
     pub(crate) right: bool,
 }
 
-#[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Inputs {
     Direction(Direction),
     Spawn,
-    Target(Vec<Entity>, Vec2),
     None,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ClientMessage {
+    Target(Vec<Entity>, Vec2),
+}
+
+impl MapEntities for ClientMessage {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        match self {
+            ClientMessage::Target(entities, _) => {
+                for entity in entities {
+                    print!("map {entity} to ");
+                    *entity = entity_mapper.map_entity(*entity);
+                    println!("{entity}");
+                }
+            }
+        }
+    }
 }
 
 #[derive(Channel)]
@@ -187,34 +142,6 @@ impl Mul<f32> for &PlayerPosition {
 )]
 pub struct PlayerColor(pub Color);
 
-#[derive(
-    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
-)]
-pub struct MinionPosition(pub Vec2);
-
-impl Add for MinionPosition {
-    type Output = MinionPosition;
-
-    #[inline]
-    fn add(self, rhs: MinionPosition) -> MinionPosition {
-        MinionPosition(self.0.add(rhs.0))
-    }
-}
-
-impl Mul<f32> for &MinionPosition {
-    type Output = MinionPosition;
-
-    #[inline]
-    fn mul(self, rhs: f32) -> MinionPosition {
-        MinionPosition(self.0 * rhs)
-    }
-}
-
-#[derive(
-    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
-)]
-pub struct MinionTarget(pub Vec2);
-
 pub const PROTOCOL_ID: u64 = 0;
 pub const KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
 
@@ -223,6 +150,9 @@ pub struct ProtocolPlugin;
 impl Plugin for ProtocolPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(InputPlugin::<Inputs>::default());
+
+        app.register_message::<ClientMessage>(ChannelDirection::ClientToServer)
+            .add_map_entities();
 
         app.register_type::<PlayerId>()
             .register_component::<PlayerId>(ChannelDirection::ServerToClient)
@@ -246,6 +176,10 @@ impl Plugin for ProtocolPlugin {
             .register_component::<MinionTarget>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Simple)
             .add_interpolation(ComponentSyncMode::Simple);
+        app.register_type::<OwnedBy>()
+            .register_component::<OwnedBy>(ChannelDirection::ServerToClient)
+            .add_prediction(ComponentSyncMode::Once)
+            .add_interpolation(ComponentSyncMode::Once);
 
         app.add_channel::<Channel1>(ChannelSettings {
             mode: ChannelMode::OrderedReliable(default()),

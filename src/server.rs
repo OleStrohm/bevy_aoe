@@ -8,11 +8,13 @@ use bevy::prelude::*;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::game::minion::MinionPosition;
+use crate::game::minion::MinionTarget;
 use crate::game::shared_config;
 use crate::game::shared_movement_behaviour;
+use crate::game::ClientMessage;
 use crate::game::Inputs;
-use crate::game::MinionPosition;
-use crate::game::MinionTarget;
+use crate::game::OwnedBy;
 use crate::game::PlayerColor;
 use crate::game::PlayerId;
 use crate::game::PlayerPosition;
@@ -121,7 +123,8 @@ fn movement(
     mut commands: Commands,
     mut positions: Query<&mut PlayerPosition>,
     mut input_reader: EventReader<InputEvent<Inputs, ClientId>>,
-    mut minion_targets: Query<(&ControlledBy, &mut MinionTarget)>,
+    mut message_reader: EventReader<ServerMessageEvent<ClientMessage>>,
+    mut minion_targets: Query<&mut MinionTarget>,
     global: Res<Global>,
     time: Res<Time>,
 ) {
@@ -148,8 +151,8 @@ fn movement(
                         )),
                         Replicate {
                             sync: SyncTarget {
-                                prediction: NetworkTarget::Single(client_id),
-                                interpolation: NetworkTarget::AllExceptSingle(client_id),
+                                prediction: NetworkTarget::None,   //NetworkTarget::Single(client_id),
+                                interpolation: NetworkTarget::All, //AllExceptSingle(client_id),
                             },
                             controlled_by: ControlledBy {
                                 target: NetworkTarget::Single(client_id),
@@ -157,16 +160,23 @@ fn movement(
                             },
                             ..default()
                         },
+                        OwnedBy(client_id),
                     ));
                 }
-                Inputs::Target(minions, target) => {
-                    for (controlled_by, mut m_target) in &mut minion_targets {
-                        if controlled_by.targets(&client_id) {
-                            m_target.0 = *target;
-                        }
+                Inputs::None => {}
+            }
+        }
+    }
+
+    for event in message_reader.read() {
+        match &event.message {
+            ClientMessage::Target(minions, target) => {
+                println!("targeting something!");
+                for &minion in minions {
+                    if let Ok(mut minion_target) = minion_targets.get_mut(minion) {
+                        minion_target.0 = *target;
                     }
                 }
-                Inputs::None => {}
             }
         }
     }
