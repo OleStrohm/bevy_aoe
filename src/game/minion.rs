@@ -2,12 +2,12 @@ use std::ops::Add;
 use std::ops::Mul;
 
 use bevy::prelude::*;
-use lightyear::prelude::client::{Interpolated, Predicted};
 use lightyear::prelude::*;
 
 use crate::client::Selected;
 
 use super::PlayerColor;
+use super::Relevant;
 
 pub struct MinionPlugin;
 
@@ -15,7 +15,12 @@ impl Plugin for MinionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
-            (show_minions, show_selected_minions, move_minions),
+            (
+                show_minions,
+                (minion_movement, move_minions).chain(),
+                (show_selected_minions, apply_deferred).chain(),
+            )
+                .chain(),
         );
     }
 }
@@ -48,7 +53,21 @@ impl Mul<f32> for &MinionPosition {
 )]
 pub struct MinionTarget(pub Vec2);
 
-fn move_minions(mut minions: Query<(&MinionPosition, &mut Transform)>) {
+fn minion_movement(
+    mut minions: Query<(&mut MinionPosition, &MinionTarget), Relevant>,
+    time: Res<Time<Fixed>>,
+) {
+    for (mut pos, target) in &mut minions {
+        let diff = target.0 - pos.0;
+        if diff.length_squared() < 0.001 {
+            pos.0 = target.0;
+        } else {
+            pos.0 += diff.clamp_length(0.0, 1.0 * time.delta_seconds());
+        }
+    }
+}
+
+fn move_minions(mut minions: Query<(&MinionPosition, &mut Transform), Relevant>) {
     for (pos, mut tf) in &mut minions {
         tf.translation = pos.extend(0.0);
     }
@@ -56,35 +75,27 @@ fn move_minions(mut minions: Query<(&MinionPosition, &mut Transform)>) {
 
 fn show_minions(
     mut commands: Commands,
-    players: Query<
-        (
-            Entity,
-            &MinionPosition,
-            &PlayerColor,
-            Option<&Predicted>,
-            Option<&Interpolated>,
-        ),
-        Without<Sprite>,
-    >,
+    players: Query<(Entity, &MinionPosition, &PlayerColor), (Without<Sprite>, Relevant)>,
 ) {
-    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
-        if predicted.is_some() || interpolated.is_some() {
-            commands.entity(player).insert(SpriteBundle {
-                sprite: Sprite { color, ..default() },
-                transform: Transform {
-                    translation: pos.extend(0.0),
-                    scale: Vec3::splat(0.5),
-                    ..default()
-                },
+    for (player, pos, &PlayerColor(color)) in &players {
+        commands.entity(player).insert(SpriteBundle {
+            sprite: Sprite { color, ..default() },
+            transform: Transform {
+                translation: pos.extend(0.0),
+                scale: Vec3::splat(0.5),
                 ..default()
-            });
-        }
+            },
+            ..default()
+        });
     }
 }
 
 fn show_selected_minions(
     mut commands: Commands,
-    selected_minions: Query<(Entity, Option<&Selected>)>,
+    selected_minions: Query<
+        (Entity, Option<&Selected>),
+        Or<(Changed<Selected>, Without<Selected>)>,
+    >,
 ) {
     for (minion, selected) in &selected_minions {
         if selected.is_some() {

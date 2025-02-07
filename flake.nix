@@ -1,5 +1,5 @@
 {
-  description = "Rust flake with nightly";
+  description = "Rust flake with stable";
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";

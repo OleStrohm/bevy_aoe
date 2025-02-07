@@ -15,6 +15,13 @@ use self::minion::MinionTarget;
 
 pub mod minion;
 
+pub type Relevant = Or<(
+    With<Predicted>,
+    With<Interpolated>,
+    With<Replicating>,
+    With<PreSpawnedPlayerObject>,
+)>;
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -83,7 +90,7 @@ pub struct Direction {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Inputs {
     Direction(Direction),
-    Spawn,
+    Spawn(Vec2, Color),
     None,
 }
 
@@ -97,9 +104,7 @@ impl MapEntities for ClientMessage {
         match self {
             ClientMessage::Target(entities, _) => {
                 for entity in entities {
-                    print!("map {entity} to ");
                     *entity = entity_mapper.map_entity(*entity);
-                    println!("{entity}");
                 }
             }
         }

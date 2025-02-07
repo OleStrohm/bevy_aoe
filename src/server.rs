@@ -76,7 +76,7 @@ impl Plugin for ServerPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
         })
-        .add_systems(FixedUpdate, (handle_connections, movement, minion_movement));
+        .add_systems(FixedUpdate, (handle_connections, movement));
     }
 }
 
@@ -139,20 +139,16 @@ fn movement(
                         }
                     }
                 }
-                Inputs::Spawn => {
+                &Inputs::Spawn(pos, color) => {
                     commands.spawn((
                         Name::new(format!("Minion - {client_id}")),
-                        MinionPosition(Vec2::ZERO),
+                        MinionPosition(pos),
                         MinionTarget(Vec2::new(4.0, 4.0)),
-                        PlayerColor(Color::linear_rgb(
-                            rand::random(),
-                            rand::random(),
-                            rand::random(),
-                        )),
+                        PlayerColor(color),
                         Replicate {
                             sync: SyncTarget {
-                                prediction: NetworkTarget::None,   //NetworkTarget::Single(client_id),
-                                interpolation: NetworkTarget::All, //AllExceptSingle(client_id),
+                                prediction: NetworkTarget::Single(client_id),
+                                interpolation: NetworkTarget::AllExceptSingle(client_id),
                             },
                             controlled_by: ControlledBy {
                                 target: NetworkTarget::Single(client_id),
@@ -161,6 +157,7 @@ fn movement(
                             ..default()
                         },
                         OwnedBy(client_id),
+                        PreSpawnedPlayerObject::default(),
                     ));
                 }
                 Inputs::None => {}
@@ -178,17 +175,6 @@ fn movement(
                     }
                 }
             }
-        }
-    }
-}
-
-fn minion_movement(mut minions: Query<(&mut MinionPosition, &MinionTarget)>, time: Res<Time>) {
-    for (mut pos, target) in &mut minions {
-        let diff = target.0 - pos.0;
-        if diff.length_squared() < 0.01 {
-            pos.0 = target.0;
-        } else {
-            pos.0 += diff.clamp_length(0.0, 1.0 * time.delta_seconds());
         }
     }
 }
