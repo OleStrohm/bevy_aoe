@@ -75,7 +75,10 @@ fn buffer_input(
     start_drag: Option<Res<StartDrag>>,
     mut gizmos: Gizmos,
     players: Query<&PlayerColor, (With<PlayerPosition>, With<Predicted>, Without<OwnedBy>)>,
-    mut my_minions: Query<(Entity, &MinionPosition, &mut MinionTarget, &OwnedBy), With<Predicted>>,
+    mut my_minions: Query<
+        (Entity, &MinionPosition, &mut MinionTarget, &OwnedBy),
+        Or<(With<Predicted>, With<PreSpawnedPlayerObject>)>,
+    >,
     predicted: Query<&Predicted>,
     currently_selected_minions: Query<(Entity, &OwnedBy), (With<Selected>, With<MinionPosition>)>,
     connection: Res<ClientConnection>,
@@ -164,6 +167,7 @@ fn player_movement(
     mut position_query: Query<&mut PlayerPosition, With<Predicted>>,
     mut input_reader: EventReader<InputEvent<Inputs>>,
     time: Res<Time>,
+    connection: Res<ClientConnection>,
 ) {
     for input in input_reader.read() {
         if let Some(input) = input.input() {
@@ -176,10 +180,11 @@ fn player_movement(
                 &Inputs::Spawn(pos, color) => {
                     println!("Spawn minion");
                     commands.spawn((
+                        Name::new(format!("Minion - {}", connection.id())),
                         MinionPosition(pos),
                         MinionTarget(Vec2::new(4.0, 4.0)),
-                        Transform::from_translation(pos.extend(0.0)),
                         PlayerColor(color),
+                        OwnedBy(connection.id()),
                         PreSpawnedPlayerObject::default(),
                     ));
                 }
