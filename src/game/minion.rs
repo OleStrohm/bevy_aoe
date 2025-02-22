@@ -102,7 +102,10 @@ fn show_selected_minions(mut commands: Commands, selected_minions: Query<Entity,
 }
 
 fn unselect_minions(trigger: Trigger<OnRemove, Selected>, mut commands: Commands) {
-    commands.entity(trigger.entity()).queue(|mut entity: EntityWorldMut| {
-        entity.despawn_descendants();
+    let entity = trigger.entity();
+    commands.queue(move |world: &mut World| {
+        if let Ok(mut entity) = world.get_entity_mut(entity) {
+            entity.despawn_descendants();
+        }
     });
 }

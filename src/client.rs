@@ -10,6 +10,7 @@ use lightyear::prelude::client::NetClient;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::game::minion::minion_movement;
 use crate::game::minion::MinionPosition;
 use crate::game::minion::MinionTarget;
 use crate::game::shared_config;
@@ -55,9 +56,12 @@ impl Plugin for ClientPlugin {
             .add_systems(
                 FixedPreUpdate,
                 (
-                    buffer_input.in_set(InputSystemSet::BufferInputs),
+                    buffer_input
+                        .in_set(InputSystemSet::BufferInputs)
+                        ,//.before(minion_movement),
                     player_movement,
-                ),
+                )
+                    .chain(),
             );
     }
 }
@@ -167,7 +171,7 @@ fn player_movement(
     mut commands: Commands,
     mut position_query: Query<&mut PlayerPosition, With<Predicted>>,
     mut input_reader: EventReader<InputEvent<Inputs>>,
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
     connection: Res<ClientConnection>,
 ) {
     for input in input_reader.read() {

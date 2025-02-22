@@ -95,7 +95,7 @@ pub fn server(clients: Vec<Child>) {
                 ..default()
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
-            WorldInspectorPlugin::default(),
+            //WorldInspectorPlugin::default(),
             ServerPlugin {
                 server_port: 5000,
                 clients: std::sync::Arc::new(std::sync::Mutex::new(clients)),
@@ -150,7 +150,7 @@ pub fn client(index: i32) {
                 ..default()
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
-            //WorldInspectorPlugin::default(),
+            WorldInspectorPlugin::default(),
             ClientPlugin::NetworkClient {
                 server_port: 5000,
                 client_id: index as u64,

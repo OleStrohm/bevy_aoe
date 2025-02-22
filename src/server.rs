@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::game::minion;
 use crate::game::minion::MinionPosition;
 use crate::game::minion::MinionTarget;
 use crate::game::shared_config;
@@ -76,7 +77,7 @@ impl Plugin for ServerPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
         })
-        .add_systems(FixedUpdate, (handle_connections, movement));
+        .add_systems(FixedUpdate, (handle_connections, movement));//.before(minion::minion_movement)));
     }
 }
 
@@ -126,7 +127,7 @@ fn movement(
     mut message_reader: EventReader<ServerMessageEvent<ClientMessage>>,
     mut minion_targets: Query<&mut MinionTarget>,
     global: Res<Global>,
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
 ) {
     for input in input_reader.read() {
         let client_id = input.from();
@@ -168,7 +169,6 @@ fn movement(
     for event in message_reader.read() {
         match &event.message {
             ClientMessage::Target(minions, target) => {
-                println!("targeting something!");
                 for &minion in minions {
                     if let Ok(mut minion_target) = minion_targets.get_mut(minion) {
                         minion_target.0 = *target;

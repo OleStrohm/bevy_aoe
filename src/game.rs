@@ -207,7 +207,7 @@ pub fn shared_config(mode: Mode) -> SharedConfig {
 pub fn shared_movement_behaviour(
     mut position: Mut<PlayerPosition>,
     direction: &Direction,
-    time: &Time,
+    time: &Time<Fixed>,
 ) {
     const MOVE_SPEED: f32 = 10.0;
     let move_speed = MOVE_SPEED * time.delta_secs();
