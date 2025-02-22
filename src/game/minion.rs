@@ -62,7 +62,7 @@ fn minion_movement(
         if diff.length_squared() < 0.001 {
             pos.0 = target.0;
         } else {
-            pos.0 += diff.clamp_length(0.0, 1.0 * time.delta_seconds());
+            pos.0 += diff.clamp_length(0.0, 1.0 * time.delta_secs());
         }
     }
 }

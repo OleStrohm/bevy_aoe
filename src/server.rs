@@ -129,7 +129,7 @@ fn movement(
     time: Res<Time>,
 ) {
     for input in input_reader.read() {
-        let client_id = *input.context();
+        let client_id = input.from();
         if let Some(input) = input.input() {
             match input {
                 Inputs::Direction(dir) => {

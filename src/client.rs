@@ -105,7 +105,7 @@ fn buffer_input(
     let (camera, camera_transform) = camera.single();
     if let Some(mouse_pos) = window
         .cursor_position()
-        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor))
+        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
     {
         if let Some(player_color) = player_color {
             if keypress.just_pressed(KeyCode::Space) {
@@ -138,7 +138,8 @@ fn buffer_input(
             let size = mouse_pos.max(start_drag.0) - top_left;
 
             if mouse.pressed(MouseButton::Left) {
-                gizmos.rect_2d(top_left + size / 2.0, 0.0, size, Color::BLACK);
+                let position = Isometry2d::from_translation(top_left + size / 2.0);
+                gizmos.rect_2d(position, size, Color::BLACK);
             } else if mouse.just_released(MouseButton::Left) {
                 let selrect = Rect::from_corners(top_left, top_left + size);
                 let selected_minions = my_minions

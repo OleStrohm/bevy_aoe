@@ -104,7 +104,7 @@ pub fn server(clients: Vec<Child>) {
         .add_systems(
             Update,
             move |mut windows: Query<&mut Window>, time: Res<Time>| {
-                if time.elapsed_seconds_f64() < 1.0 {
+                if time.elapsed_secs_f64() < 1.0 {
                     for mut window in &mut windows {
                         window.position = position;
                         window.resolution = resolution.clone();
@@ -148,7 +148,7 @@ pub fn client(index: i32) {
                 ..default()
             }),
             //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
-            WorldInspectorPlugin::default(),
+            //WorldInspectorPlugin::default(),
             ClientPlugin::NetworkClient {
                 server_port: 5000,
                 client_id: index as u64,
@@ -158,7 +158,7 @@ pub fn client(index: i32) {
         .add_systems(
             Update,
             move |mut windows: Query<&mut Window>, time: Res<Time>| {
-                if time.elapsed_seconds_f64() < 1.0 {
+                if time.elapsed_secs_f64() < 1.0 {
                     for mut window in &mut windows {
                         window.position = position;
                         window.resolution = resolution.clone();

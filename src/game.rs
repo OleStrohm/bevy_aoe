@@ -38,15 +38,17 @@ impl Plugin for GamePlugin {
 pub struct OwnedBy(pub ClientId);
 
 fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle {
-        projection: OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical(10.0),
+    commands.spawn((
+        Camera2d,
+        OrthographicProjection {
+            scaling_mode: ScalingMode::FixedVertical {
+                viewport_height: 10.0,
+            },
             far: 1000.0,
             near: -1000.0,
-            ..Default::default()
+            ..OrthographicProjection::default_2d()
         },
-        ..Default::default()
-    });
+    ));
 }
 
 fn move_players(mut players: Query<(&PlayerPosition, &mut Transform)>) {
@@ -70,11 +72,10 @@ fn show_players(
 ) {
     for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
         if predicted.is_some() || interpolated.is_some() {
-            commands.entity(player).insert(SpriteBundle {
-                sprite: Sprite { color, ..default() },
-                transform: Transform::from_xyz(pos.x, pos.y, 0.0),
-                ..default()
-            });
+            commands.entity(player).insert((
+                Sprite { color, ..default() },
+                Transform::from_xyz(pos.x, pos.y, 0.0),
+            ));
         }
     }
 }
@@ -209,7 +210,7 @@ pub fn shared_movement_behaviour(
     time: &Time,
 ) {
     const MOVE_SPEED: f32 = 10.0;
-    let move_speed = MOVE_SPEED * time.delta_seconds();
+    let move_speed = MOVE_SPEED * time.delta_secs();
     if direction.up {
         position.y += move_speed;
     }
