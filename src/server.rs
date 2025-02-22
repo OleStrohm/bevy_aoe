@@ -1,12 +1,13 @@
-use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::Child;
 use std::time::Duration;
 
 use bevy::prelude::*;
+use bevy::utils::HashMap;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::game::resource::{Item, ItemPos, Scoreboard};
 use crate::game::{
     minion::{MinionPosition, MinionTarget},
     shared_config, shared_movement_behaviour, ClientMessage, InputHandling, Inputs, OwnedBy,
@@ -65,6 +66,15 @@ impl Plugin for ServerPlugin {
         app.init_resource::<Global>();
         app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
+            commands.spawn((
+                Item::Apple,
+                ItemPos(Vec2::new(2.0, 2.0)),
+                Replicate::default(),
+            ));
+            commands.spawn((
+                Scoreboard(HashMap::new()),
+                Replicate::default(),
+            ));
         })
         .add_systems(
             FixedUpdate,
@@ -82,9 +92,11 @@ fn handle_connections(
     mut commands: Commands,
     mut connections: EventReader<ServerConnectEvent>,
     mut global: ResMut<Global>,
+    mut scoreboard: Query<&mut Scoreboard>,
 ) {
     for connection in connections.read() {
         let client_id = connection.client_id;
+        scoreboard.single_mut().insert(client_id, 0);
 
         let entity = commands.spawn((
             Name::new(format!("Player - {client_id}")),

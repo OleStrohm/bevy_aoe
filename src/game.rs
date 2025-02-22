@@ -12,8 +12,13 @@ use lightyear::prelude::*;
 use self::minion::MinionPlugin;
 use self::minion::MinionPosition;
 use self::minion::MinionTarget;
+use self::resource::Item;
+use self::resource::ItemPos;
+use self::resource::ResourcePlugin;
+use self::resource::Scoreboard;
 
 pub mod minion;
+pub mod resource;
 
 pub type Relevant = Or<(
     With<Predicted>,
@@ -26,7 +31,7 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((ProtocolPlugin, MinionPlugin))
+        app.add_plugins((ProtocolPlugin, MinionPlugin, ResourcePlugin))
             .add_systems(Startup, spawn_camera)
             .add_systems(FixedUpdate, (show_players, move_players));
     }
@@ -174,8 +179,8 @@ impl Plugin for ProtocolPlugin {
             .add_linear_interpolation_fn();
         app.register_type::<PlayerColor>()
             .register_component::<PlayerColor>(ChannelDirection::ServerToClient)
-            .add_prediction(ComponentSyncMode::Simple)
-            .add_interpolation(ComponentSyncMode::Simple);
+            .add_prediction(ComponentSyncMode::Once)
+            .add_interpolation(ComponentSyncMode::Once);
         app.register_type::<MinionPosition>()
             .register_component::<MinionPosition>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Full)
@@ -189,6 +194,16 @@ impl Plugin for ProtocolPlugin {
             .register_component::<OwnedBy>(ChannelDirection::ServerToClient)
             .add_prediction(ComponentSyncMode::Once)
             .add_interpolation(ComponentSyncMode::Once);
+        app.register_type::<Item>()
+            .register_component::<Item>(ChannelDirection::ServerToClient)
+            .add_prediction(ComponentSyncMode::Once)
+            .add_interpolation(ComponentSyncMode::Once);
+        app.register_type::<ItemPos>()
+            .register_component::<ItemPos>(ChannelDirection::ServerToClient)
+            .add_prediction(ComponentSyncMode::Once)
+            .add_interpolation(ComponentSyncMode::Once);
+        app.register_type::<Scoreboard>()
+            .register_component::<Scoreboard>(ChannelDirection::ServerToClient);
 
         app.add_channel::<Channel1>(ChannelSettings {
             mode: ChannelMode::OrderedReliable(default()),

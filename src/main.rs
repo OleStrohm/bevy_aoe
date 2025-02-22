@@ -83,18 +83,20 @@ pub fn server(clients: Vec<Child>) {
 
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Bevy AoE".to_string(),
-                    position,
-                    resolution: resolution.clone(),
-                    resizable: false,
-                    decorations: false,
-                    focused: true,
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Bevy AoE".to_string(),
+                        position,
+                        resolution: resolution.clone(),
+                        resizable: false,
+                        decorations: false,
+                        focused: true,
+                        ..default()
+                    }),
                     ..default()
-                }),
-                ..default()
-            }),
+                })
+                .set(ImagePlugin::default_nearest()),
             WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
             ServerPlugin {
                 server_port: 5000,
@@ -137,18 +139,20 @@ pub fn client(index: i32) {
 
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Bevy AoE - client".to_string(),
-                    position,
-                    resolution: resolution.clone(),
-                    resizable: false,
-                    decorations: false,
-                    focused: false,
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Bevy AoE - client".to_string(),
+                        position,
+                        resolution: resolution.clone(),
+                        resizable: false,
+                        decorations: false,
+                        focused: false,
+                        ..default()
+                    }),
                     ..default()
-                }),
-                ..default()
-            }),
+                })
+                .set(ImagePlugin::default_nearest()),
             WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
             ClientPlugin::NetworkClient {
                 server_port: 5000,
