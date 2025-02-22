@@ -22,6 +22,7 @@ impl Plugin for MinionPlugin {
             )
                 .chain(),
         );
+        app.add_observer(unselect_minions);
     }
 }
 
@@ -53,7 +54,7 @@ impl Mul<f32> for &MinionPosition {
 )]
 pub struct MinionTarget(pub Vec2);
 
-fn minion_movement(
+pub fn minion_movement(
     mut minions: Query<(&mut MinionPosition, &MinionTarget), Relevant>,
     time: Res<Time<Fixed>>,
 ) {
@@ -79,7 +80,7 @@ fn show_minions(
 ) {
     for (player, pos, &PlayerColor(color)) in &players {
         commands.entity(player).insert((
-            Sprite { color, ..default() },
+            Sprite::from_color(color, Vec2::splat(1.0)),
             Transform {
                 translation: pos.extend(0.0),
                 scale: Vec3::splat(0.5),
@@ -89,27 +90,19 @@ fn show_minions(
     }
 }
 
-fn show_selected_minions(
-    mut commands: Commands,
-    selected_minions: Query<
-        (Entity, Option<&Selected>),
-        Or<(Changed<Selected>, Without<Selected>)>,
-    >,
-) {
-    for (minion, selected) in &selected_minions {
-        if selected.is_some() {
-            commands.entity(minion).with_children(|commands| {
-                commands.spawn((
-                    Sprite::from_color(Color::srgb(1.0, 0.0, 1.0), Vec2::splat(1.0)),
-                    Transform {
-                        translation: Vec3::new(0.0, 0.0, -0.1),
-                        scale: Vec3::splat(1.1),
-                        ..default()
-                    },
-                ));
-            });
-        } else {
-            commands.entity(minion).despawn_descendants();
-        }
+fn show_selected_minions(mut commands: Commands, selected_minions: Query<Entity, Added<Selected>>) {
+    for minion in &selected_minions {
+        commands.entity(minion).with_children(|commands| {
+            commands.spawn((
+                Sprite::from_color(Color::srgb(1.0, 0.0, 1.0), Vec2::splat(1.1)),
+                Transform::from_xyz(0.0, 0.0, -0.1),
+            ));
+        });
     }
+}
+
+fn unselect_minions(trigger: Trigger<OnRemove, Selected>, mut commands: Commands) {
+    commands.entity(trigger.entity()).queue(|mut entity: EntityWorldMut| {
+        entity.despawn_descendants();
+    });
 }
