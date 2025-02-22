@@ -37,6 +37,9 @@ impl Plugin for GamePlugin {
 )]
 pub struct OwnedBy(pub ClientId);
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InputHandling;
+
 fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,

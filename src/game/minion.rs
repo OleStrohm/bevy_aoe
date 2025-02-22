@@ -4,10 +4,7 @@ use std::ops::Mul;
 use bevy::prelude::*;
 use lightyear::prelude::*;
 
-use crate::client::Selected;
-
-use super::PlayerColor;
-use super::Relevant;
+use super::{InputHandling, PlayerColor, Relevant};
 
 pub struct MinionPlugin;
 
@@ -20,11 +17,15 @@ impl Plugin for MinionPlugin {
                 (minion_movement, move_minions).chain(),
                 (show_selected_minions, apply_deferred).chain(),
             )
-                .chain(),
+                .chain()
+                .after(InputHandling),
         );
         app.add_observer(unselect_minions);
     }
 }
+
+#[derive(Debug, Component)]
+pub struct Selected;
 
 #[derive(
     Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,

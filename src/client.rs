@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
+
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use lightyear::client::input::native::InputSystemSet;
@@ -10,35 +11,23 @@ use lightyear::prelude::client::NetClient;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
-use crate::game::minion::minion_movement;
-use crate::game::minion::MinionPosition;
-use crate::game::minion::MinionTarget;
-use crate::game::shared_config;
-use crate::game::shared_movement_behaviour;
-use crate::game::Channel1;
-use crate::game::ClientMessage;
-use crate::game::OwnedBy;
-use crate::game::PlayerColor;
-use crate::game::PlayerPosition;
-use crate::game::KEY;
-use crate::game::PROTOCOL_ID;
-use crate::game::{Direction, Inputs};
+use crate::game::minion::Selected;
+use crate::game::{
+    minion::{MinionPosition, MinionTarget},
+    shared_config, shared_movement_behaviour, Channel1, ClientMessage, Direction, InputHandling,
+    Inputs, OwnedBy, PlayerColor, PlayerPosition, KEY, PROTOCOL_ID,
+};
 
-use self::client::ClientCommands;
-use self::client::ClientConfig;
-use self::client::ClientConnection;
-use self::client::InputManager;
-use self::client::Predicted;
-use self::client::{Authentication, ClientTransport, IoConfig, NetConfig};
+use self::client::{
+    Authentication, ClientCommands, ClientConfig, ClientConnection, ClientTransport, InputManager,
+    IoConfig, NetConfig, Predicted,
+};
 
 #[derive(Debug, Resource)]
 pub struct StartDrag(Vec2);
 
 #[derive(Debug, Resource)]
 pub struct SelectedMinions(Vec<Entity>);
-
-#[derive(Debug, Component)]
-pub struct Selected;
 
 pub enum ClientPlugin {
     HostClient,
@@ -56,10 +45,8 @@ impl Plugin for ClientPlugin {
             .add_systems(
                 FixedPreUpdate,
                 (
-                    buffer_input
-                        .in_set(InputSystemSet::BufferInputs)
-                        ,//.before(minion_movement),
-                    player_movement,
+                    buffer_input.in_set(InputSystemSet::BufferInputs),
+                    player_movement.in_set(InputHandling),
                 )
                     .chain(),
             );

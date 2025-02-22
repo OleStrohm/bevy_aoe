@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::process::Child;
 use std::time::Duration;
 
@@ -8,26 +7,16 @@ use bevy::prelude::*;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
-use crate::game::minion;
-use crate::game::minion::MinionPosition;
-use crate::game::minion::MinionTarget;
-use crate::game::shared_config;
-use crate::game::shared_movement_behaviour;
-use crate::game::ClientMessage;
-use crate::game::Inputs;
-use crate::game::OwnedBy;
-use crate::game::PlayerColor;
-use crate::game::PlayerId;
-use crate::game::PlayerPosition;
-use crate::game::KEY;
-use crate::game::PROTOCOL_ID;
+use crate::game::{
+    minion::{MinionPosition, MinionTarget},
+    shared_config, shared_movement_behaviour, ClientMessage, InputHandling, Inputs, OwnedBy,
+    PlayerColor, PlayerId, PlayerPosition, KEY, PROTOCOL_ID,
+};
 
-use self::server::ControlledBy;
-use self::server::NetcodeConfig;
-use self::server::Replicate;
-use self::server::ServerCommands;
-use self::server::SyncTarget;
-use self::server::{IoConfig, NetConfig, ServerTransport};
+use self::server::{
+    ControlledBy, IoConfig, NetConfig, NetcodeConfig, Replicate, ServerCommands, ServerTransport,
+    SyncTarget,
+};
 
 pub struct ServerPlugin {
     pub server_port: u16,
@@ -77,7 +66,10 @@ impl Plugin for ServerPlugin {
         app.add_systems(Startup, |mut commands: Commands| {
             commands.start_server();
         })
-        .add_systems(FixedUpdate, (handle_connections, movement));//.before(minion::minion_movement)));
+        .add_systems(
+            FixedUpdate,
+            (handle_connections, movement.in_set(InputHandling)).chain(),
+        );
     }
 }
 

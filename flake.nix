@@ -5,14 +5,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        rust-overlay.follows = "rust-overlay";
-        flake-utils.follows = "flake-utils";
-      };
-    };
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs = { self, flake-utils, rust-overlay, nixpkgs, crane }:
@@ -43,7 +36,9 @@
       in
       with pkgs;
       {
-        devShells.default = mkShell {
+        devShells.default = mkShell.override {
+          stdenv = pkgs.stdenvAdapters.useMoldLinker clangStdenv;
+        } {
           inputsFrom = [ bin ];
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
         };
