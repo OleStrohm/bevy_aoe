@@ -78,15 +78,14 @@ fn show_minions(
     players: Query<(Entity, &MinionPosition, &PlayerColor), (Without<Sprite>, Relevant)>,
 ) {
     for (player, pos, &PlayerColor(color)) in &players {
-        commands.entity(player).insert(SpriteBundle {
-            sprite: Sprite { color, ..default() },
-            transform: Transform {
+        commands.entity(player).insert((
+            Sprite { color, ..default() },
+            Transform {
                 translation: pos.extend(0.0),
                 scale: Vec3::splat(0.5),
                 ..default()
             },
-            ..default()
-        });
+        ));
     }
 }
 
@@ -100,18 +99,14 @@ fn show_selected_minions(
     for (minion, selected) in &selected_minions {
         if selected.is_some() {
             commands.entity(minion).with_children(|commands| {
-                commands.spawn(SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::srgb(1.0, 0.0, 1.0),
-                        ..default()
-                    },
-                    transform: Transform {
+                commands.spawn((
+                    Sprite::from_color(Color::srgb(1.0, 0.0, 1.0), Vec2::splat(1.0)),
+                    Transform {
                         translation: Vec3::new(0.0, 0.0, -0.1),
                         scale: Vec3::splat(1.1),
                         ..default()
                     },
-                    ..default()
-                });
+                ));
             });
         } else {
             commands.entity(minion).despawn_descendants();

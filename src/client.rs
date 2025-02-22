@@ -115,7 +115,7 @@ fn buffer_input(
 
         if mouse.just_pressed(MouseButton::Right) {
             message_manager
-                .send_message::<Channel1, _>(&mut ClientMessage::Target(
+                .send_message::<Channel1, _>(&ClientMessage::Target(
                     selected_minions
                         .0
                         .iter()

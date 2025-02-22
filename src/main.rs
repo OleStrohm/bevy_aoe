@@ -50,11 +50,13 @@ fn start_client(index: usize, prefix: impl Display) -> std::process::Child {
 
     let prefix = format!("{{ print \"{} \" $0}}", prefix);
 
+    #[expect(clippy::zombie_processes)]
     std::process::Command::new("awk")
         .arg(prefix.clone())
         .stdin(child.stdout.take().unwrap())
         .spawn()
         .unwrap();
+    #[expect(clippy::zombie_processes)]
     std::process::Command::new("awk")
         .arg(prefix)
         .stdin(child.stderr.take().unwrap())
