@@ -3,6 +3,7 @@
 use std::fmt::Display;
 use std::process::{Child, Stdio};
 
+use bevy::input::common_conditions::input_toggle_active;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -35,7 +36,7 @@ fn main() {
 
             server(vec![client1, client2]);
         }
-        _ => panic!("The first argument is nonsensical"),
+        _ => panic!("The first argument must be in {{server,client,host}}"),
     }
 }
 
@@ -94,8 +95,7 @@ pub fn server(clients: Vec<Child>) {
                 }),
                 ..default()
             }),
-            //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
-            //WorldInspectorPlugin::default(),
+            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
             ServerPlugin {
                 server_port: 5000,
                 clients: std::sync::Arc::new(std::sync::Mutex::new(clients)),
@@ -149,8 +149,7 @@ pub fn client(index: i32) {
                 }),
                 ..default()
             }),
-            //.disable::<AudioPlugin>(/* Disabled due to audio bug with pipewire */),
-            WorldInspectorPlugin::default(),
+            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
             ClientPlugin::NetworkClient {
                 server_port: 5000,
                 client_id: index as u64,
