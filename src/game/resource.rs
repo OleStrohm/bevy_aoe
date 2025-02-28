@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use bevy::input::common_conditions::input_pressed;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy::utils::HashMap;
@@ -22,7 +23,7 @@ pub fn ResourcePlugin(app: &mut App) {
                 .run_if(on_timer(Duration::from_secs(1))),
         ),
     )
-    .add_systems(Update, show_scoreboard);
+    .add_systems(Update, show_scoreboard.run_if(input_pressed(KeyCode::Tab)));
 }
 
 #[derive(Debug, Component, Reflect, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]

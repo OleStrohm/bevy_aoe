@@ -12,15 +12,12 @@ impl Plugin for MinionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
-            (
-                show_minions,
-                (minion_movement, move_minions).chain(),
-                (show_selected_minions, apply_deferred).chain(),
-            )
+            (show_minions, (minion_movement, move_minions).chain())
                 .chain()
                 .after(InputHandling),
         );
         app.add_observer(unselect_minions);
+        app.add_observer(show_selected_minions);
     }
 }
 
@@ -91,15 +88,13 @@ fn show_minions(
     }
 }
 
-fn show_selected_minions(mut commands: Commands, selected_minions: Query<Entity, Added<Selected>>) {
-    for minion in &selected_minions {
-        commands.entity(minion).with_children(|commands| {
-            commands.spawn((
-                Sprite::from_color(Color::srgb(1.0, 0.0, 1.0), Vec2::splat(1.1)),
-                Transform::from_xyz(0.0, 0.0, -0.1),
-            ));
-        });
-    }
+fn show_selected_minions(trigger: Trigger<OnAdd, Selected>, mut commands: Commands) {
+    commands.entity(trigger.entity()).with_children(|commands| {
+        commands.spawn((
+            Sprite::from_color(Color::srgb(1.0, 0.0, 1.0), Vec2::splat(1.1)),
+            Transform::from_xyz(0.0, 0.0, -0.1),
+        ));
+    });
 }
 
 fn unselect_minions(trigger: Trigger<OnRemove, Selected>, mut commands: Commands) {
