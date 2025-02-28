@@ -1,8 +1,8 @@
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::thread::sleep;
 use std::time::Duration;
-
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -17,6 +17,7 @@ use crate::game::{
     shared_config, shared_movement_behaviour, Channel1, ClientMessage, Direction, InputHandling,
     Inputs, OwnedBy, PlayerColor, PlayerPosition, KEY, PROTOCOL_ID,
 };
+use crate::NetworkState;
 
 use self::client::{
     Authentication, ClientCommands, ClientConfig, ClientConnection, ClientTransport, InputManager,
@@ -29,19 +30,35 @@ pub struct StartDrag(Vec2);
 #[derive(Debug, Resource)]
 pub struct SelectedMinions(Vec<Entity>);
 
-pub enum ClientPlugin {
-    HostClient,
-    NetworkClient { server_port: u16, client_id: u64 },
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct IsClient;
+
+impl ComputedStates for IsClient {
+    type SourceStates = NetworkState;
+
+    fn compute(network_state: NetworkState) -> Option<Self> {
+        match network_state {
+            NetworkState::Host { .. } | NetworkState::Client { .. } => Some(Self),
+            _ => None,
+        }
+    }
 }
+
+pub struct ClientPlugin;
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(client::ClientPlugins::new(self.client_config()));
+        let net_config = NetConfig::Local { id: 0 };
+        let client_config = ClientConfig {
+            shared: shared_config(Mode::HostServer),
+            net: net_config,
+            ..default()
+        };
+
+        app.add_plugins(client::ClientPlugins::new(client_config));
 
         app.insert_resource(SelectedMinions(vec![]))
-            .add_systems(Startup, |mut commands: Commands| {
-                commands.connect_client();
-            })
+            .add_computed_state::<IsClient>()
             .add_systems(
                 FixedPreUpdate,
                 (
@@ -49,8 +66,63 @@ impl Plugin for ClientPlugin {
                     player_movement.in_set(InputHandling),
                 )
                     .chain(),
-            );
+            )
+            .add_systems(OnEnter(IsClient), start_client);
     }
+}
+
+fn start_client(
+    mut commands: Commands,
+    network_state: Res<State<NetworkState>>,
+    mut client_config: ResMut<ClientConfig>,
+) {
+    *client_config = match network_state.get() {
+        NetworkState::Host { .. } => {
+            let net_config = NetConfig::Local { id: 0 };
+
+            ClientConfig {
+                shared: shared_config(Mode::HostServer),
+                net: net_config,
+                ..default()
+            }
+        }
+        &NetworkState::Client {
+            server_addr,
+            client_id,
+        } => {
+            let link_conditioner = LinkConditionerConfig {
+                incoming_latency: Duration::from_millis(200),
+                incoming_jitter: Duration::from_millis(0),
+                incoming_loss: 0.0,
+            };
+            let io_config = IoConfig::from_transport(ClientTransport::UdpSocket(
+                SocketAddr::from_str("0.0.0.0:0").unwrap(),
+            ))
+            .with_conditioner(link_conditioner);
+
+            let auth = Authentication::Manual {
+                server_addr,
+                client_id,
+                private_key: KEY,
+                protocol_id: PROTOCOL_ID,
+            };
+
+            let net_config = NetConfig::Netcode {
+                auth,
+                io: io_config,
+                config: default(),
+            };
+
+            ClientConfig {
+                shared: shared_config(Mode::Separate),
+                net: net_config,
+                ..default()
+            }
+        }
+        _ => return,
+    };
+
+    commands.connect_client();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -181,55 +253,6 @@ fn player_movement(
                     ));
                 }
                 Inputs::None => (),
-            }
-        }
-    }
-}
-
-impl ClientPlugin {
-    fn client_config(&self) -> ClientConfig {
-        match self {
-            ClientPlugin::HostClient => {
-                let net_config = NetConfig::Local { id: 0 };
-
-                client::ClientConfig {
-                    shared: shared_config(Mode::HostServer),
-                    net: net_config,
-                    ..default()
-                }
-            }
-            &ClientPlugin::NetworkClient {
-                server_port,
-                client_id,
-            } => {
-                let link_conditioner = LinkConditionerConfig {
-                    incoming_latency: Duration::from_millis(200),
-                    incoming_jitter: Duration::from_millis(0),
-                    incoming_loss: 0.0,
-                };
-                let io_config = IoConfig::from_transport(ClientTransport::UdpSocket(
-                    SocketAddr::from_str("0.0.0.0:0").unwrap(),
-                ))
-                .with_conditioner(link_conditioner);
-                let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), server_port);
-                let auth = Authentication::Manual {
-                    server_addr,
-                    client_id,
-                    private_key: KEY,
-                    protocol_id: PROTOCOL_ID,
-                };
-
-                let net_config = NetConfig::Netcode {
-                    auth,
-                    io: io_config,
-                    config: default(),
-                };
-
-                client::ClientConfig {
-                    shared: shared_config(Mode::Separate),
-                    net: net_config,
-                    ..default()
-                }
             }
         }
     }

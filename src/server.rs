@@ -1,5 +1,4 @@
 use std::net::{Ipv4Addr, SocketAddr};
-use std::process::Child;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -13,16 +12,28 @@ use crate::game::{
     shared_config, shared_movement_behaviour, ClientMessage, InputHandling, Inputs, OwnedBy,
     PlayerColor, PlayerId, PlayerPosition, KEY, PROTOCOL_ID,
 };
+use crate::NetworkState;
 
 use self::server::{
-    ControlledBy, IoConfig, NetConfig, NetcodeConfig, Replicate, ServerCommands, ServerTransport,
-    SyncTarget,
+    ControlledBy, IoConfig, NetConfig, NetcodeConfig, Replicate, ServerCommands, ServerConfig,
+    ServerTransport, SyncTarget,
 };
 
-pub struct ServerPlugin {
-    pub server_port: u16,
-    pub clients: std::sync::Arc<std::sync::Mutex<Vec<Child>>>,
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct IsServer;
+
+impl ComputedStates for IsServer {
+    type SourceStates = NetworkState;
+
+    fn compute(network_state: NetworkState) -> Option<Self> {
+        match network_state {
+            NetworkState::Host { .. } | NetworkState::Server { .. } => Some(Self),
+            _ => None,
+        }
+    }
 }
+
+pub struct ServerPlugin;
 
 impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
@@ -31,7 +42,7 @@ impl Plugin for ServerPlugin {
             incoming_jitter: Duration::from_millis(0),
             incoming_loss: 0.0,
         };
-        let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), self.server_port);
+        let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0);
         let io_config = IoConfig::from_transport(ServerTransport::UdpSocket(server_addr))
             .with_conditioner(link_conditioner);
         let netcode_config = NetcodeConfig::default()
@@ -43,7 +54,7 @@ impl Plugin for ServerPlugin {
             io: io_config,
         };
 
-        let server_config = server::ServerConfig {
+        let server_config = ServerConfig {
             shared: shared_config(Mode::HostServer),
             net: vec![net_config],
             replication: ReplicationConfig {
@@ -54,33 +65,70 @@ impl Plugin for ServerPlugin {
         };
 
         app.add_plugins(server::ServerPlugins::new(server_config));
-        let mut clients = std::mem::take(&mut *self.clients.lock().unwrap());
-        app.add_systems(Last, move |app_exit: EventReader<AppExit>| {
-            if !app_exit.is_empty() {
-                for client in &mut clients {
-                    client.kill().unwrap();
-                }
-            }
-        });
+        //let mut clients = std::mem::take(&mut *self.clients.lock().unwrap());
+        //app.add_systems(Last, move |app_exit: EventReader<AppExit>| {
+        //    if !app_exit.is_empty() {
+        //        for client in &mut clients {
+        //            client.kill().unwrap();
+        //        }
+        //    }
+        //});
 
-        app.init_resource::<Global>();
-        app.add_systems(Startup, |mut commands: Commands| {
-            commands.start_server();
-            commands.spawn((
-                Item::Apple,
-                ItemPos(Vec2::new(2.0, 2.0)),
-                Replicate::default(),
-            ));
-            commands.spawn((
-                Scoreboard(HashMap::new()),
-                Replicate::default(),
-            ));
-        })
-        .add_systems(
-            FixedUpdate,
-            (handle_connections, movement.in_set(InputHandling)).chain(),
-        );
+        app.init_resource::<Global>()
+            .add_computed_state::<IsServer>()
+            .add_systems(
+                FixedUpdate,
+                (handle_connections, movement.in_set(InputHandling)).chain(),
+            )
+            .add_systems(OnEnter(IsServer), start_server);
     }
+}
+
+fn start_server(
+    mut commands: Commands,
+    network_state: Res<State<NetworkState>>,
+    mut server_config: ResMut<ServerConfig>,
+) {
+    // Start server
+    match network_state.get() {
+        &NetworkState::Host(addr) | &NetworkState::Server(addr) => {
+            let link_conditioner = LinkConditionerConfig {
+                incoming_latency: Duration::from_millis(200),
+                incoming_jitter: Duration::from_millis(0),
+                incoming_loss: 0.0,
+            };
+            let io_config = IoConfig::from_transport(ServerTransport::UdpSocket(addr))
+                .with_conditioner(link_conditioner);
+            let netcode_config = NetcodeConfig::default()
+                .with_protocol_id(PROTOCOL_ID)
+                .with_key(KEY);
+
+            let net_config = NetConfig::Netcode {
+                config: netcode_config,
+                io: io_config,
+            };
+
+            *server_config = ServerConfig {
+                shared: shared_config(Mode::HostServer),
+                net: vec![net_config],
+                replication: ReplicationConfig {
+                    send_interval: Duration::from_millis(40),
+                    ..default()
+                },
+                ..default()
+            };
+        }
+        _ => return,
+    };
+    commands.start_server();
+
+    // Set up game world
+    commands.spawn((
+        Item::Apple,
+        ItemPos(Vec2::new(2.0, 2.0)),
+        Replicate::default(),
+    ));
+    commands.spawn((Scoreboard(HashMap::new()), Replicate::default()));
 }
 
 #[derive(Resource, Default)]

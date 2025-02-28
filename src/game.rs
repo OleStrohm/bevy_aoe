@@ -9,6 +9,8 @@ use lightyear::connection::netcode::PRIVATE_KEY_BYTES;
 use lightyear::prelude::client::{ComponentSyncMode, Interpolated, Predicted};
 use lightyear::prelude::*;
 
+use crate::NetworkState;
+
 use self::minion::MinionPlugin;
 use self::minion::MinionPosition;
 use self::minion::MinionTarget;
@@ -33,7 +35,8 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((ProtocolPlugin, MinionPlugin, ResourcePlugin))
             .add_systems(Startup, spawn_camera)
-            .add_systems(FixedUpdate, (show_players, move_players));
+            .add_systems(FixedUpdate, (show_players, move_players))
+            .add_systems(OnEnter(NetworkState::Disconnected), || println!("enter disconnected!"));
     }
 }
 

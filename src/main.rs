@@ -1,7 +1,8 @@
 #![allow(clippy::type_complexity)]
 
 use std::fmt::Display;
-use std::process::{Child, Stdio};
+use std::net::{Ipv4Addr, SocketAddr};
+use std::process::Stdio;
 
 use bevy::input::common_conditions::input_toggle_active;
 use bevy::prelude::*;
@@ -18,6 +19,18 @@ mod client;
 mod game;
 mod server;
 
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
+pub enum NetworkState {
+    #[default]
+    Disconnected,
+    Host(SocketAddr),
+    Server(SocketAddr),
+    Client {
+        server_addr: SocketAddr,
+        client_id: u64,
+    },
+}
+
 fn main() {
     match std::env::args().nth(1).as_deref() {
         Some("client") => client(
@@ -27,20 +40,18 @@ fn main() {
                 .parse::<i32>()
                 .expect("Second argument must be a number"),
         ),
-        Some("server") => {
-            server(vec![]);
-        }
+        Some("server") => server(),
         Some("host") | None => {
-            let client1 = start_client(1, "[C1]".green());
-            let client2 = start_client(2, "[C2]".yellow());
+            start_client(1, "[C1]".green());
+            start_client(2, "[C2]".yellow());
 
-            server(vec![client1, client2]);
+            server();
         }
         _ => panic!("The first argument must be in {{server,client,host}}"),
     }
 }
 
-fn start_client(index: usize, prefix: impl Display) -> std::process::Child {
+fn start_client(index: usize, prefix: impl Display) {
     let mut child = std::process::Command::new(std::env::args().next().unwrap())
         .args(["client", &format!("{index}")])
         .stdin(Stdio::piped())
@@ -64,11 +75,54 @@ fn start_client(index: usize, prefix: impl Display) -> std::process::Child {
         .spawn()
         .unwrap();
 
-    child
+    let _ = child;
 }
 
-pub fn server(clients: Vec<Child>) {
-    println!("Starting server!");
+pub fn create_app(
+    title: String,
+    position: WindowPosition,
+    resolution: WindowResolution,
+    focused: bool,
+) -> App {
+    let mut app = App::new();
+    app.add_plugins((
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title,
+                    position,
+                    resolution: resolution.clone(),
+                    //resizable: false,
+                    decorations: false,
+                    focused,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(ImagePlugin::default_nearest()),
+        WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
+        ServerPlugin,
+        ClientPlugin,
+        GamePlugin,
+    ))
+    .add_systems(
+        Update,
+        move |mut windows: Query<&mut Window>, time: Res<Time>| {
+            if time.elapsed_secs_f64() < 1.0 {
+                for mut window in &mut windows {
+                    window.position = position;
+                    window.resolution = resolution.clone();
+                    window.focused = focused;
+                }
+            }
+        },
+    )
+    .init_state::<NetworkState>();
+    app
+}
+
+pub fn server() {
+    println!("Starting host server/client!");
 
     let monitor_width = 2560.0;
     let monitor_height = 1440.0;
@@ -81,42 +135,21 @@ pub fn server(clients: Vec<Child>) {
     let resolution =
         WindowResolution::new(window_width, window_height).with_scale_factor_override(1.0);
 
-    App::new()
-        .add_plugins((
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "Bevy AoE".to_string(),
-                        position,
-                        resolution: resolution.clone(),
-                        resizable: false,
-                        decorations: false,
-                        focused: true,
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(ImagePlugin::default_nearest()),
-            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
-            ServerPlugin {
-                server_port: 5000,
-                clients: std::sync::Arc::new(std::sync::Mutex::new(clients)),
-            },
-            ClientPlugin::HostClient,
-            GamePlugin,
-        ))
+    create_app("Bevy AoE - Server".into(), position, resolution, true)
         .add_systems(
             Update,
             move |mut windows: Query<&mut Window>, time: Res<Time>| {
                 if time.elapsed_secs_f64() < 1.0 {
                     for mut window in &mut windows {
-                        window.position = position;
-                        window.resolution = resolution.clone();
                         window.focused = true;
                     }
                 }
             },
         )
+        .insert_state(NetworkState::Host(SocketAddr::new(
+            Ipv4Addr::LOCALHOST.into(),
+            5000,
+        )))
         .run();
 }
 
@@ -137,39 +170,10 @@ pub fn client(index: i32) {
     let resolution =
         WindowResolution::new(window_width, window_height).with_scale_factor_override(1.0);
 
-    App::new()
-        .add_plugins((
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "Bevy AoE - client".to_string(),
-                        position,
-                        resolution: resolution.clone(),
-                        resizable: false,
-                        decorations: false,
-                        focused: false,
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(ImagePlugin::default_nearest()),
-            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
-            ClientPlugin::NetworkClient {
-                server_port: 5000,
-                client_id: index as u64,
-            },
-            GamePlugin,
-        ))
-        .add_systems(
-            Update,
-            move |mut windows: Query<&mut Window>, time: Res<Time>| {
-                if time.elapsed_secs_f64() < 1.0 {
-                    for mut window in &mut windows {
-                        window.position = position;
-                        window.resolution = resolution.clone();
-                    }
-                }
-            },
-        )
+    create_app("Bevy AoE - client".into(), position, resolution, false)
+        .insert_state(NetworkState::Client {
+            server_addr: SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 5000),
+            client_id: index as u64,
+        })
         .run();
 }
