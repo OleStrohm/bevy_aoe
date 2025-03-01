@@ -15,6 +15,8 @@ use game::GamePlugin;
 use networking::NetworkState;
 use server::ServerPlugin;
 
+use self::networking::show_networking_menu;
+
 mod client;
 mod game;
 mod networking;
@@ -22,6 +24,15 @@ mod server;
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
+        _ | Some("normal") => {
+            create_app(
+                "Bevy AoE".into(),
+                WindowPosition::Centered(MonitorSelection::Primary),
+                default(),
+                true,
+            )
+            .run();
+        }
         Some("client") => client(
             std::env::args()
                 .nth(2)
@@ -96,15 +107,18 @@ pub fn create_app(
     ))
     .add_systems(
         Update,
-        move |mut windows: Query<&mut Window>, time: Res<Time>| {
-            if time.elapsed_secs_f64() < 1.0 {
-                for mut window in &mut windows {
-                    window.position = position;
-                    window.resolution = resolution.clone();
-                    window.focused = focused;
+        (
+            move |mut windows: Query<&mut Window>, time: Res<Time>| {
+                if time.elapsed_secs_f64() < 1.0 {
+                    for mut window in &mut windows {
+                        window.position = position;
+                        window.resolution = resolution.clone();
+                        window.focused = focused;
+                    }
                 }
-            }
-        },
+            },
+            show_networking_menu.run_if(in_state(NetworkState::Disconnected)),
+        ),
     )
     .init_state::<NetworkState>();
     app
