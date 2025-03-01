@@ -24,15 +24,8 @@ mod server;
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
-        _ | Some("normal") => {
-            create_app(
-                "Bevy AoE".into(),
-                WindowPosition::Centered(MonitorSelection::Primary),
-                default(),
-                true,
-            )
-            .run();
-        }
+        _ if cfg!(not(debug_assertions)) => start_normal(),
+        Some("normal") => start_normal(),
         Some("client") => client(
             std::env::args()
                 .nth(2)
@@ -49,6 +42,16 @@ fn main() {
         }
         _ => panic!("The first argument must be in {{server,client,host}}"),
     }
+}
+
+fn start_normal() {
+    create_app(
+        "Bevy AoE".into(),
+        WindowPosition::Centered(MonitorSelection::Primary),
+        default(),
+        true,
+    )
+    .run();
 }
 
 fn start_client(index: usize, prefix: impl Display) {
