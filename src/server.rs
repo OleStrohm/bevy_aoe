@@ -11,10 +11,11 @@ use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
 use crate::game::{
+    ClientMessage, InputHandling, KEY, PROTOCOL_ID,
     minion::MinionTarget,
-    player::{shared_movement_behaviour, Inputs, PlayerColor, PlayerId, PlayerPosition},
+    player::{Inputs, PlayerColor, PlayerId, PlayerPosition, shared_movement_behaviour},
     resource::{Item, ItemPos, Scoreboard},
-    shared_config, ClientMessage, InputHandling, KEY, PROTOCOL_ID,
+    shared_config,
 };
 use crate::networking::{IsServer, NetworkState};
 

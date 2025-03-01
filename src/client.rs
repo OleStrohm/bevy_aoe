@@ -8,15 +8,16 @@ use lightyear::client::input::native::InputSystemSet;
 use lightyear::prelude::client::NetClient;
 use lightyear::prelude::*;
 
+use crate::game::InputHandling;
 use crate::game::minion::Selected;
 use crate::game::player::Direction;
 use crate::game::player::Inputs;
 use crate::game::player::PlayerColor;
 use crate::game::player::PlayerPosition;
-use crate::game::InputHandling;
 use crate::game::{
+    Channel1, ClientMessage, KEY, OwnedBy, PROTOCOL_ID,
     minion::{MinionPosition, MinionTarget},
-    shared_config, Channel1, ClientMessage, OwnedBy, KEY, PROTOCOL_ID,
+    shared_config,
 };
 use crate::networking::IsClient;
 use crate::networking::NetworkState;
@@ -49,7 +50,9 @@ impl Plugin for ClientPlugin {
             .add_computed_state::<IsClient>()
             .add_systems(
                 FixedPreUpdate,
-                buffer_input.in_set(InputSystemSet::BufferInputs).in_set(InputHandling),
+                buffer_input
+                    .in_set(InputSystemSet::BufferInputs)
+                    .in_set(InputHandling),
             )
             .add_systems(OnEnter(IsClient), start_client);
     }

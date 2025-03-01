@@ -5,9 +5,9 @@ use bevy::prelude::*;
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::game::OwnedBy;
 use crate::game::minion::MinionPosition;
 use crate::game::minion::MinionTarget;
-use crate::game::OwnedBy;
 
 use self::client::ClientConnection;
 use self::client::NetClient;

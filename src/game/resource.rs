@@ -4,13 +4,13 @@ use bevy::input::common_conditions::input_pressed;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy::utils::HashMap;
-use bevy_egui::egui::Align2;
 use bevy_egui::EguiContexts;
-use lightyear::prelude::{is_server, ClientId};
+use bevy_egui::egui::Align2;
+use lightyear::prelude::{ClientId, is_server};
 use serde::{Deserialize, Serialize};
 
-use super::minion::MinionPosition;
 use super::OwnedBy;
+use super::minion::MinionPosition;
 
 #[expect(non_snake_case)]
 pub fn ResourcePlugin(app: &mut App) {
