@@ -18,6 +18,9 @@ use crate::game::{
     shared_config,
 };
 use crate::networking::{IsServer, NetworkState};
+use crate::SteamClient;
+
+use self::server::SteamConfig;
 
 pub struct ServerPlugin;
 
@@ -65,6 +68,7 @@ fn start_server(
     mut commands: Commands,
     network_state: Res<State<NetworkState>>,
     mut server_config: ResMut<ServerConfig>,
+    steam_client: Res<SteamClient>,
 ) {
     // Start server
     match network_state.get() {
@@ -75,7 +79,7 @@ fn start_server(
                 incoming_loss: 0.0,
             };
             let io_config = IoConfig::from_transport(ServerTransport::UdpSocket(addr))
-                .with_conditioner(link_conditioner);
+                .with_conditioner(link_conditioner.clone());
             let netcode_config = NetcodeConfig::default()
                 .with_protocol_id(PROTOCOL_ID)
                 .with_key(KEY);
@@ -85,9 +89,23 @@ fn start_server(
                 io: io_config,
             };
 
+            let steam_config = NetConfig::Steam {
+                steamworks_client: Some(steam_client.clone()),
+                config: SteamConfig {
+                    app_id: 480, // The steam test app id
+                    socket_config: server::SocketConfig::Ip {
+                        server_ip: Ipv4Addr::UNSPECIFIED,
+                        game_port: addr.port() + 1,
+                        query_port: 27016,
+                    },
+                    ..default()
+                },
+                conditioner: Some(link_conditioner),
+            };
+
             *server_config = ServerConfig {
                 shared: shared_config(Mode::HostServer),
-                net: vec![net_config],
+                net: vec![net_config, steam_config],
                 replication: ReplicationConfig {
                     send_interval: Duration::from_millis(40),
                     ..default()

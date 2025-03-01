@@ -8,6 +8,7 @@ use lightyear::client::input::native::InputSystemSet;
 use lightyear::prelude::client::NetClient;
 use lightyear::prelude::*;
 
+use crate::SteamClient;
 use crate::game::InputHandling;
 use crate::game::minion::Selected;
 use crate::game::player::Direction;
@@ -62,6 +63,7 @@ fn start_client(
     mut commands: Commands,
     network_state: Res<State<NetworkState>>,
     mut client_config: ResMut<ClientConfig>,
+    steam_client: Res<SteamClient>,
 ) {
     *client_config = match network_state.get() {
         NetworkState::Host { .. } => {
@@ -100,6 +102,26 @@ fn start_client(
                 config: default(),
             };
 
+            ClientConfig {
+                shared: shared_config(Mode::Separate),
+                net: net_config,
+                ..default()
+            }
+        }
+        &NetworkState::ClientSteam { server_addr } => {
+            let link_conditioner = LinkConditionerConfig {
+                incoming_latency: Duration::from_millis(200),
+                incoming_jitter: Duration::from_millis(0),
+                incoming_loss: 0.0,
+            };
+            let net_config = NetConfig::Steam {
+                steamworks_client: Some(steam_client.clone()),
+                config: client::SteamConfig {
+                    socket_config: client::SocketConfig::Ip { server_addr },
+                    app_id: 480,
+                },
+                conditioner: Some(link_conditioner),
+            };
             ClientConfig {
                 shared: shared_config(Mode::Separate),
                 net: net_config,

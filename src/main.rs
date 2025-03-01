@@ -3,16 +3,19 @@
 use std::fmt::Display;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::Stdio;
+use std::sync::Arc;
 
 use bevy::input::common_conditions::input_toggle_active;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use lightyear::prelude::SteamworksClient;
 use owo_colors::OwoColorize;
 
 use client::ClientPlugin;
 use game::GamePlugin;
 use networking::NetworkState;
+use parking_lot::RwLock;
 use server::ServerPlugin;
 
 use self::networking::show_networking_menu;
@@ -25,7 +28,7 @@ mod server;
 fn main() {
     match std::env::args().nth(1).as_deref() {
         _ if cfg!(not(debug_assertions)) => start_normal(),
-        Some("normal") => start_normal(),
+        _ | Some("normal") => start_normal(),
         Some("client") => client(
             std::env::args()
                 .nth(2)
@@ -87,43 +90,45 @@ pub fn create_app(
     resolution: WindowResolution,
     focused: bool,
 ) -> App {
+    let steam_client = Arc::new(RwLock::new(SteamworksClient::new_with_app_id(480)));
     let mut app = App::new();
-    app.add_plugins((
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title,
-                    position,
-                    resolution: resolution.clone(),
-                    //resizable: false,
-                    decorations: false,
-                    focused,
+    app.insert_resource(SteamClient(steam_client))
+        .add_plugins((
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title,
+                        position,
+                        resolution: resolution.clone(),
+                        //resizable: false,
+                        decorations: false,
+                        focused,
+                        ..default()
+                    }),
                     ..default()
-                }),
-                ..default()
-            })
-            .set(ImagePlugin::default_nearest()),
-        WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
-        ServerPlugin,
-        ClientPlugin,
-        GamePlugin,
-    ))
-    .add_systems(
-        Update,
-        (
-            move |mut windows: Query<&mut Window>, time: Res<Time>| {
-                if time.elapsed_secs_f64() < 1.0 {
-                    for mut window in &mut windows {
-                        window.position = position;
-                        window.resolution = resolution.clone();
-                        window.focused = focused;
+                })
+                .set(ImagePlugin::default_nearest()),
+            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
+            ServerPlugin,
+            ClientPlugin,
+            GamePlugin,
+        ))
+        .add_systems(
+            Update,
+            (
+                move |mut windows: Query<&mut Window>, time: Res<Time>| {
+                    if time.elapsed_secs_f64() < 1.0 {
+                        for mut window in &mut windows {
+                            window.position = position;
+                            window.resolution = resolution.clone();
+                            window.focused = focused;
+                        }
                     }
-                }
-            },
-            show_networking_menu.run_if(in_state(NetworkState::Disconnected)),
-        ),
-    )
-    .init_state::<NetworkState>();
+                },
+                show_networking_menu.run_if(in_state(NetworkState::Disconnected)),
+            ),
+        )
+        .init_state::<NetworkState>();
     app
 }
 
@@ -183,3 +188,6 @@ pub fn client(index: i32) {
         })
         .run();
 }
+
+#[derive(Resource, Deref)]
+struct SteamClient(pub Arc<RwLock<SteamworksClient>>);

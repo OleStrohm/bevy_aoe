@@ -8,11 +8,13 @@ bevy = { version = "0.15", features = [ "dynamic_linking" ] }
 bevy-inspector-egui = "0.29.1"
 bevy_egui = "0.32.0"
 fork = "0.2.0"
-lightyear = { version = "0.19.0", features = ["leafwing"] }
+lightyear = { version = "0.19.0", features = ["leafwing", "steam"] }
 os_pipe = "1.2.1"
 owo-colors = "4.1.0"
+parking_lot = "0.12.3"
 rand = "0.8.5"
 serde = { version = "1.0.210", features = ["derive"] }
+steamworks = "0.11.0"
 tracing-subscriber = "0.3.18"
 
 [profile.dev.package."*"]
