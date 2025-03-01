@@ -18,7 +18,8 @@ use crate::game::{
     minion::{MinionPosition, MinionTarget},
     shared_config, Channel1, ClientMessage, OwnedBy, KEY, PROTOCOL_ID,
 };
-use crate::NetworkState;
+use crate::networking::IsClient;
+use crate::networking::NetworkState;
 
 use self::client::{
     Authentication, ClientCommands, ClientConfig, ClientConnection, ClientTransport, InputManager,
@@ -30,20 +31,6 @@ pub struct StartDrag(Vec2);
 
 #[derive(Debug, Resource)]
 pub struct SelectedMinions(Vec<Entity>);
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct IsClient;
-
-impl ComputedStates for IsClient {
-    type SourceStates = NetworkState;
-
-    fn compute(network_state: NetworkState) -> Option<Self> {
-        match network_state {
-            NetworkState::Host { .. } | NetworkState::Client { .. } => Some(Self),
-            _ => None,
-        }
-    }
-}
 
 pub struct ClientPlugin;
 

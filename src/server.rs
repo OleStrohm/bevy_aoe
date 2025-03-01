@@ -16,21 +16,7 @@ use crate::game::{
     resource::{Item, ItemPos, Scoreboard},
     shared_config, ClientMessage, InputHandling, KEY, PROTOCOL_ID,
 };
-use crate::NetworkState;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct IsServer;
-
-impl ComputedStates for IsServer {
-    type SourceStates = NetworkState;
-
-    fn compute(network_state: NetworkState) -> Option<Self> {
-        match network_state {
-            NetworkState::Host { .. } | NetworkState::Server { .. } => Some(Self),
-            _ => None,
-        }
-    }
-}
+use crate::networking::{IsServer, NetworkState};
 
 pub struct ServerPlugin;
 

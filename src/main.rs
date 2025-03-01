@@ -10,26 +10,15 @@ use bevy::window::WindowResolution;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use owo_colors::OwoColorize;
 
+use client::ClientPlugin;
 use game::GamePlugin;
-
-use self::client::ClientPlugin;
-use self::server::ServerPlugin;
+use networking::NetworkState;
+use server::ServerPlugin;
 
 mod client;
 mod game;
+mod networking;
 mod server;
-
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
-pub enum NetworkState {
-    #[default]
-    Disconnected,
-    Host(SocketAddr),
-    Server(SocketAddr),
-    Client {
-        server_addr: SocketAddr,
-        client_id: u64,
-    },
-}
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
