@@ -3,7 +3,7 @@ name: Nix Flake actions
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
+      - "dev_release"
 
 permissions:
   contents: write
@@ -34,5 +34,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: aoe_windows.zip
           asset_name: aoe_windows.zip
-          tag: "0.1"
+          tag: "dev"
           overwrite: true
