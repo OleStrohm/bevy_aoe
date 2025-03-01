@@ -1,7 +1,5 @@
-use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::thread::sleep;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -9,13 +7,16 @@ use bevy::window::PrimaryWindow;
 use lightyear::client::input::native::InputSystemSet;
 use lightyear::prelude::client::NetClient;
 use lightyear::prelude::*;
-use lightyear::shared::events::components::InputEvent;
 
 use crate::game::minion::Selected;
+use crate::game::player::Direction;
+use crate::game::player::Inputs;
+use crate::game::player::PlayerColor;
+use crate::game::player::PlayerPosition;
+use crate::game::InputHandling;
 use crate::game::{
     minion::{MinionPosition, MinionTarget},
-    shared_config, shared_movement_behaviour, Channel1, ClientMessage, Direction, InputHandling,
-    Inputs, OwnedBy, PlayerColor, PlayerPosition, KEY, PROTOCOL_ID,
+    shared_config, Channel1, ClientMessage, OwnedBy, KEY, PROTOCOL_ID,
 };
 use crate::NetworkState;
 
@@ -61,11 +62,7 @@ impl Plugin for ClientPlugin {
             .add_computed_state::<IsClient>()
             .add_systems(
                 FixedPreUpdate,
-                (
-                    buffer_input.in_set(InputSystemSet::BufferInputs),
-                    player_movement.in_set(InputHandling),
-                )
-                    .chain(),
+                buffer_input.in_set(InputSystemSet::BufferInputs).in_set(InputHandling),
             )
             .add_systems(OnEnter(IsClient), start_client);
     }
@@ -189,6 +186,7 @@ fn buffer_input(
                 .unwrap();
             for &minion in &selected_minions.0 {
                 if let Ok((.., mut target, _)) = my_minions.get_mut(minion) {
+                    // println!("pos: {pos:?}, target: {target:?}");
                     *target = MinionTarget(mouse_pos);
                 }
             }
@@ -221,38 +219,6 @@ fn buffer_input(
                 }
                 println!("Selected {} minions", selected_minions.len());
                 commands.insert_resource(SelectedMinions(selected_minions));
-            }
-        }
-    }
-}
-
-fn player_movement(
-    mut commands: Commands,
-    mut position_query: Query<&mut PlayerPosition, With<Predicted>>,
-    mut input_reader: EventReader<InputEvent<Inputs>>,
-    time: Res<Time<Fixed>>,
-    connection: Res<ClientConnection>,
-) {
-    for input in input_reader.read() {
-        if let Some(input) = input.input() {
-            match input {
-                Inputs::Direction(dir) => {
-                    for position in position_query.iter_mut() {
-                        shared_movement_behaviour(position, dir, &time);
-                    }
-                }
-                &Inputs::Spawn(pos, color) => {
-                    println!("Spawn minion");
-                    commands.spawn((
-                        Name::new(format!("Minion - {}", connection.id())),
-                        MinionPosition(pos),
-                        MinionTarget(Vec2::new(4.0, 4.0)),
-                        PlayerColor(color),
-                        OwnedBy(connection.id()),
-                        PreSpawnedPlayerObject::default(),
-                    ));
-                }
-                Inputs::None => (),
             }
         }
     }

@@ -3,21 +3,20 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy::utils::HashMap;
-use lightyear::prelude::*;
-use lightyear::shared::events::components::InputEvent;
-
-use crate::game::resource::{Item, ItemPos, Scoreboard};
-use crate::game::{
-    minion::{MinionPosition, MinionTarget},
-    shared_config, shared_movement_behaviour, ClientMessage, InputHandling, Inputs, OwnedBy,
-    PlayerColor, PlayerId, PlayerPosition, KEY, PROTOCOL_ID,
-};
-use crate::NetworkState;
-
-use self::server::{
+use lightyear::prelude::server::{
     ControlledBy, IoConfig, NetConfig, NetcodeConfig, Replicate, ServerCommands, ServerConfig,
     ServerTransport, SyncTarget,
 };
+use lightyear::prelude::*;
+use lightyear::shared::events::components::InputEvent;
+
+use crate::game::{
+    minion::MinionTarget,
+    player::{shared_movement_behaviour, Inputs, PlayerColor, PlayerId, PlayerPosition},
+    resource::{Item, ItemPos, Scoreboard},
+    shared_config, ClientMessage, InputHandling, KEY, PROTOCOL_ID,
+};
+use crate::NetworkState;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct IsServer;
@@ -64,21 +63,12 @@ impl Plugin for ServerPlugin {
             ..default()
         };
 
-        app.add_plugins(server::ServerPlugins::new(server_config));
-        //let mut clients = std::mem::take(&mut *self.clients.lock().unwrap());
-        //app.add_systems(Last, move |app_exit: EventReader<AppExit>| {
-        //    if !app_exit.is_empty() {
-        //        for client in &mut clients {
-        //            client.kill().unwrap();
-        //        }
-        //    }
-        //});
-
-        app.init_resource::<Global>()
+        app.add_plugins(server::ServerPlugins::new(server_config))
+            .init_resource::<Global>()
             .add_computed_state::<IsServer>()
             .add_systems(
                 FixedUpdate,
-                (handle_connections, movement.in_set(InputHandling)).chain(),
+                (handle_connections, handle_inputs.in_set(InputHandling)).chain(),
             )
             .add_systems(OnEnter(IsServer), start_server);
     }
@@ -172,7 +162,7 @@ fn handle_connections(
     }
 }
 
-fn movement(
+fn handle_inputs(
     mut commands: Commands,
     mut positions: Query<&mut PlayerPosition>,
     mut input_reader: EventReader<InputEvent<Inputs, ClientId>>,
@@ -184,36 +174,52 @@ fn movement(
     for input in input_reader.read() {
         let client_id = input.from();
         if let Some(input) = input.input() {
-            match input {
-                Inputs::Direction(dir) => {
-                    if let Some(player_entity) = global.client_id_to_entity_id.get(&client_id) {
-                        if let Ok(position) = positions.get_mut(*player_entity) {
-                            shared_movement_behaviour(position, dir, &time);
-                        }
-                    }
-                }
-                &Inputs::Spawn(pos, color) => {
-                    commands.spawn((
-                        Name::new(format!("Minion - {client_id}")),
-                        MinionPosition(pos),
-                        MinionTarget(Vec2::new(4.0, 4.0)),
-                        PlayerColor(color),
-                        Replicate {
-                            sync: SyncTarget {
-                                prediction: NetworkTarget::Single(client_id),
-                                interpolation: NetworkTarget::AllExceptSingle(client_id),
-                            },
-                            controlled_by: ControlledBy {
-                                target: NetworkTarget::Single(client_id),
+            if let Some(player_entity) = global.client_id_to_entity_id.get(&client_id) {
+                if let Ok(mut position) = positions.get_mut(*player_entity) {
+                    shared_movement_behaviour(
+                        input,
+                        &mut commands,
+                        &mut position,
+                        &time,
+                        client_id,
+                        (
+                            Replicate {
+                                sync: SyncTarget {
+                                    prediction: NetworkTarget::Single(client_id),
+                                    interpolation: NetworkTarget::AllExceptSingle(client_id),
+                                },
+                                controlled_by: ControlledBy {
+                                    target: NetworkTarget::Single(client_id),
+                                    ..default()
+                                },
                                 ..default()
                             },
-                            ..default()
-                        },
-                        OwnedBy(client_id),
-                        PreSpawnedPlayerObject::default(),
-                    ));
+                            PreSpawnedPlayerObject::default(),
+                        ),
+                    );
+                    //&Inputs::Spawn(pos, color) => {
+                    //    commands.spawn((
+                    //        Name::new(format!("Minion - {client_id}")),
+                    //        MinionPosition(pos),
+                    //        MinionTarget(Vec2::new(4.0, 4.0)),
+                    //        PlayerColor(color),
+                    //        Replicate {
+                    //            sync: SyncTarget {
+                    //                prediction: NetworkTarget::Single(client_id),
+                    //                interpolation: NetworkTarget::AllExceptSingle(client_id),
+                    //            },
+                    //            controlled_by: ControlledBy {
+                    //                target: NetworkTarget::Single(client_id),
+                    //                ..default()
+                    //            },
+                    //            ..default()
+                    //        },
+                    //        OwnedBy(client_id),
+                    //        PreSpawnedPlayerObject::default(),
+                    //    ));
+                    //}
+                    //Inputs::None => {}
                 }
-                Inputs::None => {}
             }
         }
     }

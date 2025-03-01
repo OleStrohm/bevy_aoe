@@ -1,5 +1,3 @@
-use std::ops::Add;
-use std::ops::Mul;
 use std::time::Duration;
 
 use bevy::ecs::entity::MapEntities;
@@ -12,12 +10,14 @@ use lightyear::prelude::*;
 use self::minion::MinionPlugin;
 use self::minion::MinionPosition;
 use self::minion::MinionTarget;
+use self::player::{Inputs, PlayerColor, PlayerId, PlayerPlugin, PlayerPosition};
 use self::resource::Item;
 use self::resource::ItemPos;
 use self::resource::ResourcePlugin;
 use self::resource::Scoreboard;
 
 pub mod minion;
+pub mod player;
 pub mod resource;
 
 pub type Relevant = Or<(
@@ -31,9 +31,8 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((ProtocolPlugin, MinionPlugin, ResourcePlugin))
-            .add_systems(Startup, spawn_camera)
-            .add_systems(FixedUpdate, (show_players, move_players));
+        app.add_plugins((ProtocolPlugin, PlayerPlugin, MinionPlugin, ResourcePlugin))
+            .add_systems(Startup, spawn_camera);
     }
 }
 
@@ -59,50 +58,6 @@ fn spawn_camera(mut commands: Commands) {
     ));
 }
 
-fn move_players(mut players: Query<(&PlayerPosition, &mut Transform)>) {
-    for (pos, mut tf) in &mut players {
-        tf.translation = pos.extend(0.0);
-    }
-}
-
-fn show_players(
-    mut commands: Commands,
-    players: Query<
-        (
-            Entity,
-            &PlayerPosition,
-            &PlayerColor,
-            Option<&Predicted>,
-            Option<&Interpolated>,
-        ),
-        Without<Sprite>,
-    >,
-) {
-    for (player, pos, &PlayerColor(color), predicted, interpolated) in &players {
-        if predicted.is_some() || interpolated.is_some() {
-            commands.entity(player).insert((
-                Sprite { color, ..default() },
-                Transform::from_xyz(pos.x, pos.y, 0.0),
-            ));
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Direction {
-    pub(crate) up: bool,
-    pub(crate) down: bool,
-    pub(crate) left: bool,
-    pub(crate) right: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum Inputs {
-    Direction(Direction),
-    Spawn(Vec2, Color),
-    None,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ClientMessage {
     Target(Vec<Entity>, Vec2),
@@ -122,39 +77,6 @@ impl MapEntities for ClientMessage {
 
 #[derive(Channel)]
 pub struct Channel1;
-
-#[derive(
-    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
-)]
-pub struct PlayerId(pub ClientId);
-
-#[derive(
-    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
-)]
-pub struct PlayerPosition(pub Vec2);
-
-impl Add for PlayerPosition {
-    type Output = PlayerPosition;
-
-    #[inline]
-    fn add(self, rhs: PlayerPosition) -> PlayerPosition {
-        PlayerPosition(self.0.add(rhs.0))
-    }
-}
-
-impl Mul<f32> for &PlayerPosition {
-    type Output = PlayerPosition;
-
-    #[inline]
-    fn mul(self, rhs: f32) -> PlayerPosition {
-        PlayerPosition(self.0 * rhs)
-    }
-}
-
-#[derive(
-    Component, Reflect, Deref, DerefMut, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
-)]
-pub struct PlayerColor(pub Color);
 
 pub const PROTOCOL_ID: u64 = 0;
 pub const KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
@@ -219,26 +141,5 @@ pub fn shared_config(mode: Mode) -> SharedConfig {
             tick_duration: Duration::from_secs_f64(1.0 / 64.0),
         },
         mode,
-    }
-}
-
-pub fn shared_movement_behaviour(
-    mut position: Mut<PlayerPosition>,
-    direction: &Direction,
-    time: &Time<Fixed>,
-) {
-    const MOVE_SPEED: f32 = 10.0;
-    let move_speed = MOVE_SPEED * time.delta_secs();
-    if direction.up {
-        position.y += move_speed;
-    }
-    if direction.down {
-        position.y -= move_speed;
-    }
-    if direction.left {
-        position.x -= move_speed;
-    }
-    if direction.right {
-        position.x += move_speed;
     }
 }
