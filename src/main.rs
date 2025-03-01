@@ -11,14 +11,14 @@ use bevy::window::WindowResolution;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use lightyear::prelude::SteamworksClient;
 use owo_colors::OwoColorize;
+use parking_lot::RwLock;
 
 use client::ClientPlugin;
 use game::GamePlugin;
-use networking::NetworkState;
-use parking_lot::RwLock;
+use networking::{NetworkState, SteamClient};
 use server::ServerPlugin;
 
-use self::networking::show_networking_menu;
+use self::networking::NetworkingPlugin;
 
 mod client;
 mod game;
@@ -28,7 +28,7 @@ mod server;
 fn main() {
     match std::env::args().nth(1).as_deref() {
         _ if cfg!(not(debug_assertions)) => start_normal(),
-        _ | Some("normal") => start_normal(),
+        Some("normal") => start_normal(),
         Some("client") => client(
             std::env::args()
                 .nth(2)
@@ -109,26 +109,23 @@ pub fn create_app(
                 })
                 .set(ImagePlugin::default_nearest()),
             WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F3)),
+            NetworkingPlugin,
             ServerPlugin,
             ClientPlugin,
             GamePlugin,
         ))
         .add_systems(
             Update,
-            (
-                move |mut windows: Query<&mut Window>, time: Res<Time>| {
-                    if time.elapsed_secs_f64() < 1.0 {
-                        for mut window in &mut windows {
-                            window.position = position;
-                            window.resolution = resolution.clone();
-                            window.focused = focused;
-                        }
+            (move |mut windows: Query<&mut Window>, time: Res<Time>| {
+                if time.elapsed_secs_f64() < 1.0 {
+                    for mut window in &mut windows {
+                        window.position = position;
+                        window.resolution = resolution.clone();
+                        window.focused = focused;
                     }
-                },
-                show_networking_menu.run_if(in_state(NetworkState::Disconnected)),
-            ),
-        )
-        .init_state::<NetworkState>();
+                }
+            },),
+        );
     app
 }
 
@@ -188,6 +185,3 @@ pub fn client(index: i32) {
         })
         .run();
 }
-
-#[derive(Resource, Deref)]
-struct SteamClient(pub Arc<RwLock<SteamworksClient>>);

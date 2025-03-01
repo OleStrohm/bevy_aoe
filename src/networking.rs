@@ -1,10 +1,26 @@
+use lightyear::prelude::SteamworksClient;
+use parking_lot::RwLock;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use bevy::prelude::*;
 use bevy_egui::EguiContexts;
 use bevy_egui::egui::{Align2, Style, TextEdit};
-use std::net::SocketAddr;
 use steamworks::{FriendFlags, SteamId};
 
-use crate::SteamClient;
+#[derive(Resource, Deref)]
+pub struct SteamClient(pub Arc<RwLock<SteamworksClient>>);
+
+pub struct NetworkingPlugin;
+
+impl Plugin for NetworkingPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_state::<NetworkState>().add_systems(
+            Update,
+            show_networking_menu.run_if(in_state(NetworkState::Disconnected)),
+        );
+    }
+}
 
 pub fn show_networking_menu(
     mut locals: Local<Option<String>>,
