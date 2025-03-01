@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::EguiContexts;
 use bevy_egui::egui::{Align2, Style, TextEdit};
 use std::net::SocketAddr;
-use steamworks::{FriendFlags, FriendGame, LobbyId};
+use steamworks::{FriendFlags, SteamId};
 
 use crate::SteamClient;
 
@@ -65,10 +65,7 @@ pub fn show_networking_menu(
                                 && ui.button(friend.name()).clicked()
                             {
                                 next_network_state.set(NetworkState::ClientSteam {
-                                    server_addr: SocketAddr::new(
-                                        game_info.game_address.into(),
-                                        game_info.game_port,
-                                    ),
+                                    friend: friend.id(),
                                 });
                             }
                         }
@@ -78,7 +75,7 @@ pub fn show_networking_menu(
         });
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub enum NetworkState {
     #[default]
     Disconnected,
@@ -90,7 +87,7 @@ pub enum NetworkState {
         client_id: u64,
     },
     ClientSteam {
-        server_addr: SocketAddr,
+        friend: SteamId,
     },
 }
 

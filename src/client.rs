@@ -108,7 +108,7 @@ fn start_client(
                 ..default()
             }
         }
-        &NetworkState::ClientSteam { server_addr } => {
+        &NetworkState::ClientSteam { friend } => {
             let link_conditioner = LinkConditionerConfig {
                 incoming_latency: Duration::from_millis(200),
                 incoming_jitter: Duration::from_millis(0),
@@ -117,7 +117,10 @@ fn start_client(
             let net_config = NetConfig::Steam {
                 steamworks_client: Some(steam_client.clone()),
                 config: client::SteamConfig {
-                    socket_config: client::SocketConfig::Ip { server_addr },
+                    socket_config: client::SocketConfig::P2P {
+                        virtual_port: 5001,
+                        steam_id: friend.raw(),
+                    },
                     app_id: 480,
                 },
                 conditioner: Some(link_conditioner),
