@@ -17,14 +17,28 @@
         };
         rustToolchain = pkgs.pkgsBuildHost.rust-bin.stable.latest.default.override {
           extensions = [ "rust-analyzer" "clippy" "rust-src" ];
+          targets = [
+            "x86_64-unknown-linux-gnu"
+            "x86_64-pc-windows-gnu"
+            "x86_64-pc-windows-gnullvm"
+            "x86_64-pc-windows-msvc"
+          ];
         };
+        shellPackages = with pkgs; [
+          cargo-xwin
+          cargo-zigbuild
+          rustToolchain
+        ];
+
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         src = craneLib.cleanCargoSource ./.;
-        nativeBuildInputs = with pkgs; [ rustToolchain ];
+        nativeBuildInputs = [ rustToolchain ];
         buildInputs = with pkgs; [ 
             udev alsa-lib vulkan-loader xorg.libX11 xorg.libXcursor
             xorg.libXi xorg.libXrandr libxkbcommon wayland pkg-config
+            cargo-zigbuild
         ];
+        rustFlags = "-C link-args=-Wl,-rpath,${pkgs.lib.makeLibraryPath buildInputs}";
         commonArgs = {
           inherit src buildInputs nativeBuildInputs;
         };
@@ -39,8 +53,8 @@
         devShells.default = mkShell.override {
           stdenv = pkgs.stdenvAdapters.useMoldLinker clangStdenv;
         } {
+          env."RUSTFLAGS" = rustFlags;
           inputsFrom = [ bin ];
-          LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
         };
       }
     );
