@@ -20,6 +20,8 @@ tracing-subscriber = "0.3.18"
 opt-level = 3
 
 [features]
+default = [ "debug-features" ]
+debug-features = [ "bevy/dynamic_linking" ]
 
 [profile.dev]
 opt-level = 1
