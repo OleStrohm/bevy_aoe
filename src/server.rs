@@ -10,6 +10,7 @@ use lightyear::prelude::server::{
 use lightyear::prelude::*;
 use lightyear::shared::events::components::InputEvent;
 
+use crate::SteamClient;
 use crate::game::{
     ClientMessage, InputHandling, KEY, PROTOCOL_ID,
     minion::MinionTarget,
@@ -18,7 +19,6 @@ use crate::game::{
     shared_config,
 };
 use crate::networking::{IsServer, NetworkState};
-use crate::SteamClient;
 
 use self::server::SteamConfig;
 
@@ -93,11 +93,7 @@ fn start_server(
                 steamworks_client: Some(steam_client.clone()),
                 config: SteamConfig {
                     app_id: 480, // The steam test app id
-                    socket_config: server::SocketConfig::Ip {
-                        server_ip: Ipv4Addr::UNSPECIFIED,
-                        game_port: addr.port() + 1,
-                        query_port: 27016,
-                    },
+                    socket_config: server::SocketConfig::P2P { virtual_port: 5001 },
                     ..default()
                 },
                 conditioner: Some(link_conditioner),
