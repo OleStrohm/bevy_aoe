@@ -9,7 +9,36 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-linux:
+    name: Upload linux binary
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install dependencies
+        run: sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev
+      - name: Build release
+        run: |
+          cargo build --release --no-default-features
+      - name: Prepare release
+        run: |
+          chmod +x target/release/aoe
+          mv target/release/aoe .
+      - name: Bundle release
+        run: |
+          tar -czf aoe_linux.tar.gz aoe assets
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: aoe_linux.tar.gz
+          asset_name: aoe_linux.tar.gz
+          tag: "dev"
+          overwrite: true
+  build-windows:
     name: Upload windows binary
     runs-on: ubuntu-latest
     outputs:
