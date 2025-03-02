@@ -11,6 +11,7 @@ permissions:
 jobs:
   build-linux:
     name: Upload linux binary
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -41,8 +42,6 @@ jobs:
   build-windows:
     name: Upload windows binary
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v30
